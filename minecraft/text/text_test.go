@@ -62,3 +62,14 @@ func TestState(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(j), &jTxt))
 	require.Equal(t, txt, jTxt)
 }
+
+func TestTranslation(t *testing.T) {
+	tr := &Translation{
+		Translate: "test.key",
+		With: []Component{
+			&Text{Text: "Hello"},
+		},
+	}
+	s := `{"translate":"test.key","with":[{"text":"Hello"}]}`
+	require.Equal(t, s, tr.String())
+}
