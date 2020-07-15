@@ -10,7 +10,7 @@ func TestText(t *testing.T) {
 	txt := Text{
 		Text: "Hallo ",
 		ClickEvent: &ClickEvent{
-			Action: ClickEventOpenUrl,
+			Action: OpenUrl,
 			Value:  "https://google.com/",
 		},
 		HoverEvent: &HoverEvent{

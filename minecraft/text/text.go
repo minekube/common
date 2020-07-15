@@ -11,22 +11,22 @@ const Reset = "reset"
 
 // Text color
 const (
-	ColorBlack       Color = "black"
-	ColorDarkBlue    Color = "dark_blue"
-	ColorDarkGreen   Color = "dark_green"
-	ColorDarkAqua    Color = "dark_aqua"
-	ColorDarkRed     Color = "dark_red"
-	ColorDarkPurple  Color = "dark_purple"
-	ColorGold        Color = "gold"
-	ColorGray        Color = "gray"
-	ColorDarkGray    Color = "dark_gray"
-	ColorBlue        Color = "blue"
-	ColorGreen       Color = "green"
-	ColorAqua        Color = "aqua"
-	ColorRed         Color = "red"
-	ColorLightPurple Color = "light_purple"
-	ColorYellow      Color = "yellow"
-	ColorWhite       Color = "white"
+	Black       Color = "black"
+	DarkBlue    Color = "dark_blue"
+	DarkGreen   Color = "dark_green"
+	DarkAqua    Color = "dark_aqua"
+	DarkRed     Color = "dark_red"
+	DarkPurple  Color = "dark_purple"
+	Gold        Color = "gold"
+	Gray        Color = "gray"
+	DarkGray    Color = "dark_gray"
+	Blue        Color = "blue"
+	Green       Color = "green"
+	Aqua        Color = "aqua"
+	Red         Color = "red"
+	LightPurple Color = "light_purple"
+	Yellow      Color = "yellow"
+	White       Color = "white"
 )
 
 // Decoration is a text decoration.
@@ -34,11 +34,11 @@ type Decoration string
 
 // Text decoration
 const (
-	DecorationObfuscated    Decoration = "obfuscated"
-	DecorationBold          Decoration = "bold"
-	DecorationStrikethrough Decoration = "strikethrough"
-	DecorationUnderlined    Decoration = "underlined"
-	DecorationItalic        Decoration = "italic"
+	Obfuscated    Decoration = "obfuscated"
+	Bold          Decoration = "bold"
+	Strikethrough Decoration = "strikethrough"
+	Underlined    Decoration = "underlined"
+	Italic        Decoration = "italic"
 )
 
 // Component is to be implemented by components.
@@ -122,8 +122,8 @@ func (t *Translation) String() string {
 }
 
 type ClickEvent struct {
-	Action string `json:"action,omitempty"`
-	Value  string `json:"value,omitempty"`
+	Action ClickEventAction `json:"action,omitempty"`
+	Value  string           `json:"value,omitempty"`
 }
 
 func (e *ClickEvent) Clone() *ClickEvent {
@@ -133,22 +133,24 @@ func (e *ClickEvent) Clone() *ClickEvent {
 	return &ClickEvent{Action: e.Action, Value: e.Value}
 }
 
-// Click events
+type ClickEventAction string
+
+// Click event actions
 const (
-	ClickEventOpenUrl        = "open_url"
-	ClickEventRunCommand     = "run_command"
-	ClickEventSuggestCommand = "suggest_command"
-	ClickEventChangePage     = "change_page"
+	OpenUrl        ClickEventAction = "open_url"
+	RunCommand     ClickEventAction = "run_command"
+	SuggestCommand ClickEventAction = "suggest_command"
+	ChangePage     ClickEventAction = "change_page"
 )
 
-func ClickEventOfRunCommand(command string) *ClickEvent {
-	return &ClickEvent{Action: ClickEventRunCommand, Value: command}
+func RunCommandClickEvent(command string) *ClickEvent {
+	return &ClickEvent{Action: RunCommand, Value: command}
 }
-func ClickEventOfOpenUrl(url string) *ClickEvent {
-	return &ClickEvent{Action: ClickEventOpenUrl, Value: url}
+func OpenUrlClickEvent(url string) *ClickEvent {
+	return &ClickEvent{Action: OpenUrl, Value: url}
 }
-func ClickEventOfSuggestCommand(command string) *ClickEvent {
-	return &ClickEvent{Action: ClickEventSuggestCommand, Value: command}
+func SuggestCommandClickEvent(command string) *ClickEvent {
+	return &ClickEvent{Action: SuggestCommand, Value: command}
 }
 
 type HoverEvent struct {

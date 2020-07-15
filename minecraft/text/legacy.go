@@ -12,29 +12,29 @@ const (
 
 var (
 	decorations = []string{
-		string(DecorationObfuscated),
-		string(DecorationBold),
-		string(DecorationStrikethrough),
-		string(DecorationUnderlined),
-		string(DecorationItalic),
+		string(Obfuscated),
+		string(Bold),
+		string(Strikethrough),
+		string(Underlined),
+		string(Italic),
 	}
 	colors = []string{
-		string(ColorBlack),
-		string(ColorDarkBlue),
-		string(ColorDarkGreen),
-		string(ColorDarkAqua),
-		string(ColorDarkRed),
-		string(ColorDarkPurple),
-		string(ColorGold),
-		string(ColorGray),
-		string(ColorDarkGray),
-		string(ColorBlue),
-		string(ColorGreen),
-		string(ColorAqua),
-		string(ColorRed),
-		string(ColorLightPurple),
-		string(ColorYellow),
-		string(ColorWhite),
+		string(Black),
+		string(DarkBlue),
+		string(DarkGreen),
+		string(DarkAqua),
+		string(DarkRed),
+		string(DarkPurple),
+		string(Gold),
+		string(Gray),
+		string(DarkGray),
+		string(Blue),
+		string(Green),
+		string(Aqua),
+		string(Red),
+		string(LightPurple),
+		string(Yellow),
+		string(White),
 	}
 	formats []string
 
@@ -131,15 +131,15 @@ func applyFormat(t *Text, format string) bool {
 	}
 	if decorationSet.has(format) {
 		switch Decoration(format) {
-		case DecorationItalic:
+		case Italic:
 			t.Italic = True
-		case DecorationUnderlined:
+		case Underlined:
 			t.Underlined = True
-		case DecorationStrikethrough:
+		case Strikethrough:
 			t.Strikethrough = True
-		case DecorationBold:
+		case Bold:
 			t.Bold = True
-		case DecorationObfuscated:
+		case Obfuscated:
 			t.Obfuscated = True
 		}
 		return false
