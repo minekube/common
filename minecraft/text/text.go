@@ -135,7 +135,7 @@ func (e *ClickEvent) Clone() *ClickEvent {
 
 type ClickEventAction string
 
-// Click event actions
+// Click clickevent actions
 const (
 	OpenUrl        ClickEventAction = "open_url"
 	RunCommand     ClickEventAction = "run_command"
@@ -151,6 +151,9 @@ func OpenUrlClickEvent(url string) *ClickEvent {
 }
 func SuggestCommandClickEvent(command string) *ClickEvent {
 	return &ClickEvent{Action: SuggestCommand, Value: command}
+}
+func ChangePageClickEvent(page string) *ClickEvent {
+	return &ClickEvent{Action: ChangePage, Value: page}
 }
 
 type HoverEvent struct {
@@ -168,7 +171,7 @@ func (e *HoverEvent) Clone() *HoverEvent {
 	}
 }
 
-// Hover event
+// Hover clickevent
 const (
 	HoverEventShowText   = "show_text"
 	HoverEventShowItem   = "show_item"
