@@ -1,26 +1,24 @@
 package color
 
-import (
-	"math"
-)
+import "math"
 
-const (
-	BlackValue       RGB = 0x000000
-	DarkBlueValue    RGB = 0x0000aa
-	DarkGreenValue   RGB = 0x00aa00
-	DarkAquaValue    RGB = 0x00aaaa
-	DarkRedValue     RGB = 0xaa0000
-	DarkPurpleValue  RGB = 0xaa00aa
-	GoldValue        RGB = 0xffaa00
-	GrayValue        RGB = 0xaaaaaa
-	DarkGrayValue    RGB = 0x555555
-	BlueValue        RGB = 0x5555ff
-	GreenValue       RGB = 0x55ff55
-	AquaValue        RGB = 0x55ffff
-	RedValue         RGB = 0xff5555
-	LightPurpleValue RGB = 0xff55ff
-	YellowValue      RGB = 0xffff55
-	WhiteValue       RGB = 0xffffff
+var (
+	BlackValue       = ParseHex(0x000000)
+	DarkBlueValue    = ParseHex(0x0000aa)
+	DarkGreenValue   = ParseHex(0x00aa00)
+	DarkAquaValue    = ParseHex(0x00aaaa)
+	DarkRedValue     = ParseHex(0xaa0000)
+	DarkPurpleValue  = ParseHex(0xaa00aa)
+	GoldValue        = ParseHex(0xffaa00)
+	GrayValue        = ParseHex(0xaaaaaa)
+	DarkGrayValue    = ParseHex(0x555555)
+	BlueValue        = ParseHex(0x5555ff)
+	GreenValue       = ParseHex(0x55ff55)
+	AquaValue        = ParseHex(0x55ffff)
+	RedValue         = ParseHex(0xff5555)
+	LightPurpleValue = ParseHex(0xff55ff)
+	YellowValue      = ParseHex(0xffff55)
+	WhiteValue       = ParseHex(0xffffff)
 )
 
 var (
@@ -79,13 +77,7 @@ func Exact(value int) *Named {
 
 // Nearest finds the named color nearest to the provided colour.
 // Always returns a value. Returns Black if any is nil.
-func Nearest(any TextColor) *Named {
-	if n, ok := any.(*Named); ok {
-		return n
-	}
-	if any == nil {
-		return Black
-	}
+func Nearest(any Color) *Named {
 	matchedDistance := math.MaxInt32
 	match := Black
 	for _, potential := range Names {
@@ -101,17 +93,16 @@ func Nearest(any TextColor) *Named {
 	return match
 }
 
-func distanceSqrt(self, other TextColor) int {
-	rAvg := (self.Red() + other.Red()) / 2
-	dR := self.Red() - other.Red()
-	dG := self.Green() - other.Green()
-	dB := self.Blue() - other.Blue()
+func distanceSqrt(self, other Color) int {
+	rAvg := (self.R + other.R) / 2
+	dR := self.R - other.R
+	dG := self.G - other.G
+	dB := self.B - other.B
+	return math.Sqrt(Sq(c1.R-c2.R) + sq(c1.G-c2.G) + sq(c1.B-c2.B))
 	return ((2 + (rAvg / 256)) * (dR * dR)) + (4 * (dG * dG)) + ((2 + ((255 - rAvg) / 256)) * (dB * dB))
 }
-
+*/
 type Named struct {
 	Name string
-	RGB
+	Color
 }
-
-var _ TextColor = (*Named)(nil)
