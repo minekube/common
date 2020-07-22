@@ -1,6 +1,10 @@
 package key
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 type Key interface {
 	Namespace() string
@@ -10,11 +14,28 @@ type Key interface {
 
 const MinecraftNamespace string = "minecraft"
 
-func ValidNew(namespace, value string) (k Key, valid bool) {
-	if !NamespaceValid(namespace) || !ValueValid(value) {
-		return nil, false
+func Parse(key string) (Key, error) {
+	s := strings.Split(key, ":")
+	if len(s) != 2 {
+		return nil, errors.New(`count of ":" must be 1`)
 	}
-	return &key{namespace, value}, true
+	return New(s[0], s[1]), nil
+}
+
+func ParseValid(key string) (Key, error) {
+	s := strings.Split(key, ":")
+	if len(s) != 2 {
+		return nil, errors.New(`count of ":" must be 1`)
+	}
+	return Make(s[0], s[1])
+}
+
+// Make returns a new Key where namespace and value was validated.
+func Make(namespace, value string) (k Key, err error) {
+	if !NamespaceValid(namespace) || !ValueValid(value) {
+		return nil, errors.New("invalid namespace or value")
+	}
+	return &key{namespace, value}, nil
 }
 
 func New(namespace, value string) Key {

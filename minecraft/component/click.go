@@ -5,6 +5,10 @@ type ClickEvent interface {
 	Value() string
 }
 
+func NewClickEvent(action ClickAction, value string) ClickEvent {
+	return &clickEvent{action, value}
+}
+
 type clickEvent struct {
 	action ClickAction
 	value  string

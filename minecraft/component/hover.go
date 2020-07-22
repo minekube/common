@@ -1,6 +1,7 @@
 package component
 
 import (
+	"github.com/google/uuid"
 	"go.minekube.com/common/minecraft/key"
 	"go.minekube.com/common/minecraft/nbt"
 	"reflect"
@@ -9,6 +10,10 @@ import (
 type HoverEvent interface {
 	Action() HoverAction
 	Value() interface{}
+}
+
+func NewHoverEvent(action HoverAction, value interface{}) HoverEvent {
+	return &hoverEvent{action, value}
 }
 
 func ShowText(text Component) HoverEvent {
@@ -74,12 +79,12 @@ type ShowItemHoverType struct {
 
 type ShowEntityHoverType struct {
 	Type key.Key
-	Id   [16]byte // UUID
+	Id   uuid.UUID // UUID
 	Name Component
 }
 
 var (
-	ShowTextAction   HoverAction = &hoverAction{"show_text", reflect.TypeOf(Component(nil)), true}
+	ShowTextAction   HoverAction = &hoverAction{"show_text", reflect.TypeOf(Text{}), true}
 	ShowItemAction   HoverAction = &hoverAction{"show_item", reflect.TypeOf(ShowItemHoverType{}), true}
 	ShowEntityAction HoverAction = &hoverAction{"show_entity", reflect.TypeOf(ShowEntityHoverType{}), true}
 

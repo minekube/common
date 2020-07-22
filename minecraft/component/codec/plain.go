@@ -1,73 +1,47 @@
 package codec
 
 import (
-	"bytes"
-	"errors"
+	"fmt"
 	"go.minekube.com/common/minecraft/component"
-	"go.minekube.com/common/minecraft/component/text"
+	"io"
+	"strings"
 )
 
-var ()
-
-type Codec interface {
-	Marshaler
-	Unmarshaler
-}
-
-type Unmarshaler interface {
-	// Unmarshal parses the encoded data and stores the result
-	// in the value pointed to by v. If v is nil or not a pointer,
-	// Unmarshal returns an error.
-	Unmarshal(data []byte, v interface{}) error
-}
-
-type Marshaler interface {
-	// Marshal returns the encoding of v.
-	Marshal(v component.Component) ([]byte, error)
-}
-
-// PlainComponent is a plain component serializer.
+// Plain is a plain text component serializer.
 // Plain does not support more complex features such as, but not limited
 // to, colours, decorations, ClickEvent and HoverEvent.
-type PlainComponentCodec struct{}
+type Plain struct{}
 
-var (
-	PlainComponent = &PlainComponentCodec{}
-)
+var _ Codec = (*Plain)(nil)
 
-func (p *PlainComponentCodec) Marshal(c component.Component) ([]byte, error) {
-	buf := new(bytes.Buffer)
-	if err := p.marshal(buf, c); err != nil {
-		return nil, err
+func (p Plain) Marshal(wr io.Writer, c component.Component) error {
+	b := new(strings.Builder)
+	if err := p.encode(b, c); err != nil {
+		return err
 	}
-	return buf.Bytes(), nil
+	_, err := wr.Write([]byte(b.String()))
+	return err
 }
 
-func (p *PlainComponentCodec) marshal(buf *bytes.Buffer, c component.Component) (err error) {
+func (p Plain) encode(b *strings.Builder, c component.Component) (err error) {
 	switch t := c.(type) {
-	case text.Text:
-		_, err = buf.WriteString(t.Content())
+	case *component.Text:
+		_, err = b.WriteString(t.Content)
+	default:
+		err = fmt.Errorf("unsupported component type %T", c)
 	}
 	if err != nil {
 		return err
 	}
 
 	for _, child := range c.Children() {
-		if err = p.marshal(buf, child); err != nil {
+		if err = p.encode(b, child); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (PlainComponentCodec) Unmarshal(data []byte, v interface{}) error {
-	if v == nil {
-		return errors.New("v cannot be nil")
-	}
-	ptr, ok := v.(*text.Text)
-	if !ok {
-		return errors.New("v is not a pointer")
-	}
-	*ptr = &text.Text{Content: string(data)}
-	return nil
+func (Plain) Unmarshal(str []byte) (component.Component, error) {
+	return &component.Text{Content: string(str)}, nil
 }
