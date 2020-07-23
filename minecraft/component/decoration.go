@@ -1,11 +1,19 @@
 package component
 
-import "fmt"
+import (
+	"fmt"
+	"go.minekube.com/common/minecraft/color"
+)
 
 // Format is text color or decoration.
 type Format interface {
 	fmt.Stringer
 }
+
+var (
+	_ Format = (*Decoration)(nil)
+	_ Format = (color.Color)(nil)
+)
 
 var (
 	// A decoration which makes text obfuscated/unreadable.

@@ -4,7 +4,6 @@ import (
 	. "go.minekube.com/common/minecraft/color"
 	. "go.minekube.com/common/minecraft/component"
 	"go.minekube.com/common/minecraft/component/codec"
-	"go.minekube.com/common/minecraft/text"
 	"io"
 	"regexp"
 	"strings"
@@ -122,29 +121,21 @@ func (b *stringBuilder) appendFormat(format Format) {
 
 // Code returns the legacy format.
 func (b *stringBuilder) toLegacyCode(format Format) string {
-	var color *Color
-	switch t := format.(type) {
-	case *Color:
-		color = t
-	case Color:
-		color = &t
-	}
-
-	if color != nil {
+	if color, ok := format.(Color); ok {
 		if b.l.NoDownsampleColor {
 			return color.Hex()
 		} else {
-			format = color.NearestNamed()
+			format = color.Named()
 		}
 	}
-	return string(text.LegacyChars[formatIndex(format)])
+	return string(Chars[formatIndex(format)])
 }
 
 // legacy style format
 type style struct {
 	b *stringBuilder
 
-	color       *Color
+	color       Color
 	decorations decorations
 }
 
@@ -348,17 +339,11 @@ func (l *Legacy) extractUrl(t *Text) Component {
 
 func applyFormat(t *Text, format Format) bool {
 	switch f := format.(type) {
-	case Color:
-		t.S.Color = &f
-		return true
-	case *Color:
+	case *RGB:
 		t.S.Color = f
 		return true
-	case Named:
-		t.S.Color = &f.Color
-		return true
 	case *Named:
-		t.S.Color = &f.Color
+		t.S.Color = f.RGB
 		return true
 	case Decoration:
 		t.S.SetDecoration(f, True)
@@ -420,7 +405,7 @@ func decodeFormat(legacy rune) (t FormatCodeType, f Format, ok bool) {
 }
 
 func determineFormatType(char rune) (FormatCodeType, bool) {
-	if strings.IndexRune(text.LegacyChars, char) != -1 {
+	if strings.IndexRune(Chars, char) != -1 {
 		return MojangLegacy, true
 	}
 	return 0, false

@@ -2,6 +2,7 @@ package color
 
 import (
 	"errors"
+	"fmt"
 	"github.com/lucasb-eyer/go-colorful"
 	"image/color"
 	"math"
@@ -9,8 +10,22 @@ import (
 	"strings"
 )
 
-// Color is a Minecraft text color.
-type Color colorful.Color
+// Color it the interface for a Minecraft text color,
+// either Named or RGB (for Hex).
+type Color interface {
+	fmt.Stringer
+	color.Color
+	Hex() string   // Returns the hex "html" representation of the color, as in #ff0080.
+	Named() *Named // Returns the exact or nearest Named color.
+}
+
+var (
+	_ Color = (*RGB)(nil)
+	_ Color = (*Named)(nil)
+)
+
+// RGB is a Minecraft text color.
+type RGB colorful.Color
 
 // Minecraft named color as RGB Color.
 var (
@@ -35,29 +50,29 @@ var (
 // Named is a color named by Minecraft.
 type Named struct {
 	Name string
-	Color
+	*RGB
 }
 
 // Minecraft named color.
 var (
-	Black       = Named{"black", BlackColor}
-	DarkBlue    = Named{"dark_blue", DarkBlueColor}
-	DarkGreen   = Named{"dark_green", DarkGreenColor}
-	DarkAqua    = Named{"dark_aqua", DarkAquaColor}
-	DarkRed     = Named{"dark_red", DarkRedColor}
-	DarkPurple  = Named{"dark_purple", DarkPurpleColor}
-	Gold        = Named{"gold", GoldColor}
-	Gray        = Named{"gray", GrayColor}
-	DarkGray    = Named{"dark_gray", DarkGrayColor}
-	Blue        = Named{"blue", BlueColor}
-	Green       = Named{"green", GreenColor}
-	Aqua        = Named{"aqua", AquaColor}
-	Red         = Named{"red", RedColor}
-	LightPurple = Named{"light_purple", LightPurpleColor}
-	Yellow      = Named{"yellow", YellowColor}
-	White       = Named{"white", WhiteColor}
+	Black       = &Named{"black", BlackColor}
+	DarkBlue    = &Named{"dark_blue", DarkBlueColor}
+	DarkGreen   = &Named{"dark_green", DarkGreenColor}
+	DarkAqua    = &Named{"dark_aqua", DarkAquaColor}
+	DarkRed     = &Named{"dark_red", DarkRedColor}
+	DarkPurple  = &Named{"dark_purple", DarkPurpleColor}
+	Gold        = &Named{"gold", GoldColor}
+	Gray        = &Named{"gray", GrayColor}
+	DarkGray    = &Named{"dark_gray", DarkGrayColor}
+	Blue        = &Named{"blue", BlueColor}
+	Green       = &Named{"green", GreenColor}
+	Aqua        = &Named{"aqua", AquaColor}
+	Red         = &Named{"red", RedColor}
+	LightPurple = &Named{"light_purple", LightPurpleColor}
+	Yellow      = &Named{"yellow", YellowColor}
+	White       = &Named{"white", WhiteColor}
 
-	NamesOrder = []Named{
+	NamesOrder = []*Named{
 		Black,
 		DarkBlue,
 		DarkGreen,
@@ -76,8 +91,8 @@ var (
 		White,
 	}
 
-	Names = func() map[string]Named {
-		m := map[string]Named{}
+	Names = func() map[string]*Named {
+		m := map[string]*Named{}
 		for _, a := range NamesOrder {
 			m[a.Name] = a
 		}
@@ -85,40 +100,49 @@ var (
 	}()
 )
 
-// String implements component.Format.
-func (n Named) String() string {
+// String implements Color interface.
+func (n *Named) String() string {
 	return n.Name
 }
 
-// String implements component.Format.
-func (c Color) String() string {
+// String implements Color interface.
+func (c *RGB) String() string {
 	return c.Hex()
+}
+func (c *RGB) Named() *Named {
+	return c.NearestNamed()
+}
+func (n *Named) Named() *Named {
+	return n
+}
+func (c *RGB) RGB() *RGB {
+	return c
 }
 
 // Hex returns the hex "html" representation of the color, as in #ff0080.
-func (c Color) Hex() string {
-	return colorful.Color(c).Hex()
+func (c *RGB) Hex() string {
+	return colorful.Color(*c).Hex()
 }
 
 // Distance computes the distance between two colors in RGB space.
-func (c Color) Distance(c2 Color) float64 {
-	return colorful.Color(c).DistanceRgb(colorful.Color(c2))
+func (c *RGB) Distance(c2 *RGB) float64 {
+	return colorful.Color(*c).DistanceRgb(colorful.Color(*c2))
 }
 
-// RGBA makes Color implement the Go color.Color interface.
-func (c Color) RGBA() (r uint32, g uint32, b uint32, a uint32) {
-	return colorful.Color(c).RGBA()
+// RGBA makes RGB implement the Go color.RGB interface.
+func (c *RGB) RGBA() (r uint32, g uint32, b uint32, a uint32) {
+	return colorful.Color(*c).RGBA()
 }
 
-// NearestNamed finds the nearest Named color for to this Color.
-func (c *Color) NearestNamed() Named {
+// NearestNamed finds the nearest Named color for to this RGB.
+func (c *RGB) NearestNamed() *Named {
 	matchedDistance := math.MaxFloat64
 	match := Black
 	for _, potential := range Names {
-		if potential.Color == *c {
+		if potential.RGB == c {
 			return potential
 		}
-		distance := c.Distance(potential.Color)
+		distance := c.Distance(potential.RGB)
 		if distance < matchedDistance {
 			match = potential
 			matchedDistance = distance
@@ -130,10 +154,10 @@ func (c *Color) NearestNamed() Named {
 	return match
 }
 
-// Make constructs a Color from Go's color.Color interface.
-func Make(c color.Color) (Color, bool) {
+// Make constructs a RGB from Go's color.Color interface.
+func Make(c color.Color) (*RGB, bool) {
 	col, ok := colorful.MakeColor(c)
-	return Color(col), ok
+	return (*RGB)(&col), ok
 }
 
 var InvalidFormatErr = errors.New("color.Hex: invalid format")
@@ -142,7 +166,7 @@ var InvalidFormatErr = errors.New("color.Hex: invalid format")
 // See https://en.wikipedia.org/wiki/Web_colors for input format.
 //
 // Modified version of https://stackoverflow.com/a/54200713/1705598.
-func Hex(hex string) (col Color, err error) {
+func Hex(hex string) (col *RGB, err error) {
 	// This code is faster than colorful.Hex() since we don't use Scan and reflection.
 
 	if !strings.HasPrefix(hex, "#") {
@@ -183,7 +207,7 @@ func Hex(hex string) (col Color, err error) {
 			return
 		}
 		col, _ := colorful.MakeColor(c)
-		return Color(col), nil
+		return (*RGB)(&col), nil
 	} else {
 		values, err := strconv.ParseInt(hex, 16, 32)
 		if err != nil {
@@ -194,7 +218,7 @@ func Hex(hex string) (col Color, err error) {
 
 }
 
-func HexInt(hex int) Color {
+func HexInt(hex int) *RGB {
 	var c color.RGBA
 	c.A = 0xff
 	c.R = uint8(hex >> 16)
@@ -202,12 +226,12 @@ func HexInt(hex int) Color {
 	c.B = uint8(hex & 0xff)
 
 	col, _ := colorful.MakeColor(c)
-	return Color(col)
+	return (*RGB)(&col)
 }
 
 // MustHex parses a "html" hex color-string, either in the 3 "#f0c" or 6 "#ff1034" digits form.
 // It panics on error.
-func MustHex(hex string) Color {
+func MustHex(hex string) *RGB {
 	c, err := Hex(hex)
 	if err != nil {
 		panic(err)

@@ -14,7 +14,7 @@ type Style struct {
 	Obfuscated, Bold, Strikethrough, Underlined, Italic State
 
 	Font       key.Key
-	Color      *color.Color
+	Color      color.Color
 	ClickEvent ClickEvent
 	HoverEvent HoverEvent
 	Insertion  *string // Gets the string to be inserted when this component is shift-clicked.

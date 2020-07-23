@@ -247,12 +247,12 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 	return nil
 }
 
-func (j *Json) encodeColor(c *col.Color) (s string) {
+func (j *Json) encodeColor(c col.Color) (s string) {
 	if c == nil {
 		return
 	}
 	if !j.NoDownsampleColor {
-		return c.NearestNamed().Name
+		return c.Named().Name
 	}
 	return c.Hex()
 }
@@ -536,24 +536,19 @@ func (j *Json) decodeClickEvent(o obj) ClickEvent {
 	return NewClickEvent(clickAction, value)
 }
 
-func (j *Json) decodeColor(i interface{}) (c *col.Color, dec *Decoration, reset bool, err error) {
+func (j *Json) decodeColor(i interface{}) (c col.Color, dec *Decoration, reset bool, err error) {
 	s, ok := i.(string)
 	if !ok {
 		err = errors.New("must be a string")
 		return
 	}
 	if strings.HasPrefix(s, "#") {
-		var hex col.Color
-		hex, err = col.Hex(s)
+		c, err = col.Hex(s)
 		if err != nil {
 			return
 		}
-		c = &hex
 	} else {
-		named, ok := col.Names[s]
-		if ok {
-			c = &named.Color
-		}
+		c, _ = col.Names[s]
 	}
 	_, ok = Decorations[Decoration(s)]
 	if ok {

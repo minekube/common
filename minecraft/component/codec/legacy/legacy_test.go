@@ -13,7 +13,6 @@ var l = &Legacy{
 	HexChar:           DefaultHexChar,
 	NoDownsampleColor: false,
 	ClickableUrl:      false,
-	UrlStyle:          nil,
 }
 var (
 	insert = "insert me"
@@ -21,7 +20,7 @@ var (
 		Content: "Hello",
 		Extra: []Component{
 			&Text{Content: " there!", S: Style{
-				Color:      &RedColor,
+				Color:      RedColor,
 				Italic:     True,
 				Obfuscated: False,
 			}},
@@ -33,7 +32,7 @@ var (
 			Underlined:    True,
 			Italic:        False,
 			Font:          DefaultFont,
-			Color:         &AquaColor,
+			Color:         Aqua,
 			ClickEvent:    SuggestCommand("/help"),
 			HoverEvent: ShowText(&Text{
 				Content: " world",

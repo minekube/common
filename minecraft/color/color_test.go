@@ -8,9 +8,9 @@ import (
 func TestHex(t *testing.T) {
 	c, err := Hex("#000000")
 	require.NoError(t, err)
-	require.Equal(t, Color{}, c)
+	require.Equal(t, &RGB{}, c)
 
-	exp := Color{R: 1, G: 0.6666666666666666, B: 0}
+	exp := &RGB{R: 1, G: 0.6666666666666666, B: 0}
 
 	c2, err := Hex("#ffaa00")
 	require.NoError(t, err)
@@ -23,5 +23,5 @@ func TestHex(t *testing.T) {
 
 func TestNearest(t *testing.T) {
 	nearGold := HexInt(0xffaa01)
-	require.Equal(t, GoldColor, nearGold.NearestNamed().Color)
+	require.Equal(t, GoldColor, nearGold.NearestNamed().RGB)
 }
