@@ -20,7 +20,7 @@ var (
 		Content: "Hello",
 		Extra: []Component{
 			&Text{Content: " there!", S: Style{
-				Color:      RedColor,
+				Color:      Red,
 				Italic:     True,
 				Obfuscated: False,
 			}},

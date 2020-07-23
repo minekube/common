@@ -23,5 +23,5 @@ func TestHex(t *testing.T) {
 
 func TestNearest(t *testing.T) {
 	nearGold := HexInt(0xffaa01)
-	require.Equal(t, GoldColor, nearGold.NearestNamed().RGB)
+	require.Equal(t, goldRGB, nearGold.NearestNamed().RGB)
 }

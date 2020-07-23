@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Color it the interface for a Minecraft text color,
+// Color is the interface for a Minecraft text color,
 // either Named or RGB (for Hex).
 type Color interface {
 	fmt.Stringer
@@ -29,25 +29,25 @@ type RGB colorful.Color
 
 // Minecraft named color as RGB Color.
 var (
-	BlackColor       = HexInt(0x000000)
-	DarkBlueColor    = HexInt(0x0000aa)
-	DarkGreenColor   = HexInt(0x00aa00)
-	DarkAquaColor    = HexInt(0x00aaaa)
-	DarkRedColor     = HexInt(0xaa0000)
-	DarkPurpleColor  = HexInt(0xaa00aa)
-	GoldColor        = HexInt(0xffaa00)
-	GrayColor        = HexInt(0xaaaaaa)
-	DarkGrayColor    = HexInt(0x555555)
-	BlueColor        = HexInt(0x5555ff)
-	GreenColor       = HexInt(0x55ff55)
-	AquaColor        = HexInt(0x55ffff)
-	RedColor         = HexInt(0xff5555)
-	LightPurpleColor = HexInt(0xff55ff)
-	YellowColor      = HexInt(0xffff55)
-	WhiteColor       = HexInt(0xffffff)
+	blackRGB       = HexInt(0x000000)
+	darkBlueRGB    = HexInt(0x0000aa)
+	darkGreenRGB   = HexInt(0x00aa00)
+	darkAquaRGB    = HexInt(0x00aaaa)
+	darkRedRGB     = HexInt(0xaa0000)
+	darkPurpleRGB  = HexInt(0xaa00aa)
+	goldRGB        = HexInt(0xffaa00)
+	grayRGB        = HexInt(0xaaaaaa)
+	darkGrayRGB    = HexInt(0x555555)
+	blueRGB        = HexInt(0x5555ff)
+	greenRGB       = HexInt(0x55ff55)
+	aquaRGB        = HexInt(0x55ffff)
+	redRGB         = HexInt(0xff5555)
+	lightPurpleRGB = HexInt(0xff55ff)
+	yellowRGB      = HexInt(0xffff55)
+	whiteRGB       = HexInt(0xffffff)
 )
 
-// Named is a color named by Minecraft.
+// Named is a Minecraft named text color.
 type Named struct {
 	Name string
 	*RGB
@@ -55,22 +55,22 @@ type Named struct {
 
 // Minecraft named color.
 var (
-	Black       = &Named{"black", BlackColor}
-	DarkBlue    = &Named{"dark_blue", DarkBlueColor}
-	DarkGreen   = &Named{"dark_green", DarkGreenColor}
-	DarkAqua    = &Named{"dark_aqua", DarkAquaColor}
-	DarkRed     = &Named{"dark_red", DarkRedColor}
-	DarkPurple  = &Named{"dark_purple", DarkPurpleColor}
-	Gold        = &Named{"gold", GoldColor}
-	Gray        = &Named{"gray", GrayColor}
-	DarkGray    = &Named{"dark_gray", DarkGrayColor}
-	Blue        = &Named{"blue", BlueColor}
-	Green       = &Named{"green", GreenColor}
-	Aqua        = &Named{"aqua", AquaColor}
-	Red         = &Named{"red", RedColor}
-	LightPurple = &Named{"light_purple", LightPurpleColor}
-	Yellow      = &Named{"yellow", YellowColor}
-	White       = &Named{"white", WhiteColor}
+	Black       = &Named{"black", blackRGB}
+	DarkBlue    = &Named{"dark_blue", darkBlueRGB}
+	DarkGreen   = &Named{"dark_green", darkGreenRGB}
+	DarkAqua    = &Named{"dark_aqua", darkAquaRGB}
+	DarkRed     = &Named{"dark_red", darkRedRGB}
+	DarkPurple  = &Named{"dark_purple", darkPurpleRGB}
+	Gold        = &Named{"gold", goldRGB}
+	Gray        = &Named{"gray", grayRGB}
+	DarkGray    = &Named{"dark_gray", darkGrayRGB}
+	Blue        = &Named{"blue", blueRGB}
+	Green       = &Named{"green", greenRGB}
+	Aqua        = &Named{"aqua", aquaRGB}
+	Red         = &Named{"red", redRGB}
+	LightPurple = &Named{"light_purple", lightPurpleRGB}
+	Yellow      = &Named{"yellow", yellowRGB}
+	White       = &Named{"white", whiteRGB}
 
 	NamesOrder = []*Named{
 		Black,
@@ -114,9 +114,6 @@ func (c *RGB) Named() *Named {
 }
 func (n *Named) Named() *Named {
 	return n
-}
-func (c *RGB) RGB() *RGB {
-	return c
 }
 
 // Hex returns the hex "html" representation of the color, as in #ff0080.

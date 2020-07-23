@@ -24,7 +24,7 @@ func BenchmarkJson_Marshal(b *testing.B) {
 		Underlined:    True,
 		Italic:        False,
 		Font:          DefaultFont,
-		Color:         AquaColor,
+		Color:         Aqua,
 		ClickEvent:    SuggestCommand("/help"),
 		HoverEvent: ShowText(&Text{
 			Content: " world",
@@ -47,7 +47,7 @@ var (
 		Content: "Hello",
 		Extra: []Component{
 			&Text{Content: " there!", S: Style{
-				Color:      RedColor,
+				Color:      Red,
 				Italic:     True,
 				Obfuscated: False,
 			}},
@@ -59,7 +59,7 @@ var (
 			Underlined:    True,
 			Italic:        False,
 			Font:          DefaultFont,
-			Color:         AquaColor,
+			Color:         Aqua,
 			ClickEvent:    SuggestCommand("/help"),
 			HoverEvent: ShowText(&Text{
 				Content: " world",
