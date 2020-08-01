@@ -43,6 +43,12 @@ const (
 )
 
 func (l *Legacy) Marshal(wr io.Writer, c Component) error {
+	if l.Char == 0 {
+		l.Char = DefaultChar
+	}
+	if l.HexChar == 0 {
+		l.HexChar = DefaultHexChar
+	}
 	s := newStringBuilder(l, l.Char)
 	s.append(c, &style{b: s, decorations: map[Decoration]struct{}{}})
 	_, err := wr.Write([]byte(s.String()))
@@ -101,7 +107,7 @@ func (b *stringBuilder) append(c Component, s *style) {
 
 	if t, ok := c.(*Text); ok && len(t.Content) != 0 {
 		s.applyFormat()
-		b.WriteString(t.Content)
+		_, _ = b.WriteString(t.Content)
 	}
 
 	if len(c.Children()) == 0 {
@@ -115,8 +121,8 @@ func (b *stringBuilder) append(c Component, s *style) {
 }
 
 func (b *stringBuilder) appendFormat(format Format) {
-	b.WriteRune(b.char)
-	b.WriteString(b.toLegacyCode(format))
+	_, _ = b.WriteRune(b.char)
+	_, _ = b.WriteString(b.toLegacyCode(format))
 }
 
 // Code returns the legacy format.
@@ -269,6 +275,12 @@ func (s *style) applyFullFormat() {
 
 // Unmarshal takes a string and always returns the *component.Text from it or an error.
 func (l *Legacy) Unmarshal(data []byte) (Component, error) {
+	if l.Char == 0 {
+		l.Char = DefaultChar
+	}
+	if l.HexChar == 0 {
+		l.HexChar = DefaultHexChar
+	}
 	input := string(data)
 
 	next := lastIndexFrom(input, l.Char, len(input)-1)
