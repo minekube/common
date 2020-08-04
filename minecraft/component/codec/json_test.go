@@ -47,7 +47,7 @@ var (
 		Content: "Hello",
 		Extra: []Component{
 			&Text{Content: " there!", S: Style{
-				Color:      Red,
+				Color:      Red.RGB,
 				Italic:     True,
 				Obfuscated: False,
 			}},
@@ -59,7 +59,7 @@ var (
 			Underlined:    True,
 			Italic:        False,
 			Font:          DefaultFont,
-			Color:         Aqua,
+			Color:         Aqua.RGB,
 			ClickEvent:    SuggestCommand("/help"),
 			HoverEvent: ShowText(&Text{
 				Content: " world",
@@ -83,4 +83,28 @@ func TestJson_Unmarshal_text(t *testing.T) {
 	c, err := j.Unmarshal([]byte(jsonTxt))
 	require.NoError(t, err)
 	require.Equal(t, txt, c)
+}
+
+func TestJson_translation(t *testing.T) {
+	tr := &Translation{
+		Key: "sample.key",
+		S:   Style{Color: Red.RGB},
+		With: []Component{
+			&Text{
+				Content: "Hello",
+			},
+			&Translation{
+				Key: "another.key",
+				S:   Style{},
+			},
+		},
+	}
+	s := new(strings.Builder)
+	require.NoError(t, j.Marshal(s, tr))
+	const exp = `{"color":"#ff5555","translate":"sample.key","with":[{"text":"Hello"},{"translate":"another.key"}]}`
+	require.Equal(t, exp, s.String())
+
+	tr2, err := j.Unmarshal([]byte(exp))
+	require.NoError(t, err)
+	require.Equal(t, tr, tr2)
 }

@@ -103,7 +103,8 @@ func (j *Json) encode(o obj, c Component) (err error) {
 	switch t := c.(type) {
 	case *Text:
 		return j.encodeText(o, t)
-	// TODO more types
+	case *Translation:
+		return j.encodeTranslation(o, t)
 	default:
 		return fmt.Errorf("codec.Json marshal: unsupported component type %T", c)
 	}
