@@ -211,6 +211,7 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 	var value obj
 	switch t := event.Value().(type) {
 	case *Text:
+		value = obj{}
 		if err := j.encode(value, t); err != nil {
 			return err
 		}
