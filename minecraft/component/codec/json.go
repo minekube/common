@@ -208,14 +208,12 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 }
 
 func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
-	var value interface{}
+	var value obj
 	switch t := event.Value().(type) {
 	case *Text:
-		text := obj{}
-		if err := j.encode(text, t); err != nil {
+		if err := j.encode(value, t); err != nil {
 			return err
 		}
-		value = text
 	case *ShowItemHoverType:
 		value = obj{
 			itemTag:   t.Item.String(),
@@ -237,12 +235,7 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 		o[hoverEventAction] = event.Action().Name()
 		o[hoverEventContents] = value
 		if !j.NoLegacyHover {
-			// to json string
-			data, err := json.Marshal(value)
-			if err != nil {
-				return err
-			}
-			o[hoverEventValue] = string(data)
+			o[hoverEventValue] = value
 		}
 	}
 	return nil
