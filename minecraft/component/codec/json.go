@@ -415,10 +415,9 @@ func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 	}
 	var value interface{}
 	if o.Has(hoverEventContents) {
-		value, err = j.decodeHoverEventContents(o[hoverEventContents], hoverAction, false)
+		value, err = j.decodeHoverEventContents(o[hoverEventContents], hoverAction)
 	} else if o.Has(hoverEventValue) {
-		// decode from legacy hover event value key which is json like "contents" but in a string
-		value, err = j.decodeHoverEventContents(o[hoverEventContents], hoverAction, true)
+		value, err = j.decodeHoverEventContents(o[hoverEventValue], hoverAction)
 	} else {
 		return nil, nil
 	}
@@ -428,12 +427,10 @@ func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 	return NewHoverEvent(hoverAction, value), nil
 }
 
-func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction, legacy bool) (value interface{}, err error) {
+func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (value interface{}, err error) {
 	var o obj
 	if s, ok := v.(string); ok {
-		if !legacy {
-			return nil, fmt.Errorf(`hover event's value of key "%s" is not a json object`, hoverEventContents)
-		}
+		// decode from legacy hover event value key which is json like "contents" but in a string
 		switch action {
 		case ShowTextAction:
 			text, err := j.Unmarshal([]byte(s))
