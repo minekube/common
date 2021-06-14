@@ -140,12 +140,12 @@ func (c *RGB) NearestNamed() *Named {
 			return potential
 		}
 		distance := c.Distance(potential.RGB)
+		if distance == 0 {
+			return potential // same color
+		}
 		if distance < matchedDistance {
 			match = potential
 			matchedDistance = distance
-		}
-		if distance == 0 {
-			break // same color
 		}
 	}
 	return match
