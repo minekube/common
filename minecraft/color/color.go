@@ -3,11 +3,12 @@ package color
 import (
 	"errors"
 	"fmt"
-	"github.com/lucasb-eyer/go-colorful"
 	"image/color"
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/lucasb-eyer/go-colorful"
 )
 
 // Color is the interface for a Minecraft text color,

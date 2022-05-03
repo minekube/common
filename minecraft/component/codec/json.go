@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/francoispqt/gojay"
 	"github.com/google/uuid"
+
 	col "go.minekube.com/common/minecraft/color"
 	. "go.minekube.com/common/minecraft/component"
 	"go.minekube.com/common/minecraft/key"
 	"go.minekube.com/common/minecraft/nbt"
-	"io"
-	"strings"
 )
 
 // Codec can marshal and unmarshal to/from components to/from a different format.
@@ -540,7 +542,7 @@ func (j *Json) decodeColor(i interface{}) (c col.Color, dec *Decoration, reset b
 			return
 		}
 	} else {
-		c, _ = col.Names[s]
+		c = col.Names[s]
 	}
 	_, ok = Decorations[Decoration(s)]
 	if ok {

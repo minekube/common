@@ -1,13 +1,14 @@
 package legacy
 
 import (
-	. "go.minekube.com/common/minecraft/color"
-	. "go.minekube.com/common/minecraft/component"
-	"go.minekube.com/common/minecraft/component/codec"
 	"io"
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	. "go.minekube.com/common/minecraft/color"
+	. "go.minekube.com/common/minecraft/component"
+	"go.minekube.com/common/minecraft/component/codec"
 )
 
 type Legacy struct {
@@ -103,6 +104,9 @@ func newStringBuilder(l *Legacy, char rune) *stringBuilder {
 }
 
 func (b *stringBuilder) append(c Component, s *style) {
+	if c == nil {
+		return
+	}
 	s.apply(c)
 
 	if t, ok := c.(*Text); ok && len(t.Content) != 0 {
@@ -115,6 +119,9 @@ func (b *stringBuilder) append(c Component, s *style) {
 	}
 	childrenStyle := s.copy()
 	for _, child := range c.Children() {
+		if child == nil {
+			continue
+		}
 		b.append(child, childrenStyle)
 		childrenStyle.set(s)
 	}
@@ -235,7 +242,6 @@ func (s *style) applyFormat() {
 		s.b.style.decorations[d] = struct{}{}
 		s.b.appendFormat(d)
 	}
-	return
 }
 
 func (s *style) set(s2 *style) {
@@ -417,7 +423,7 @@ func decodeFormat(legacy rune) (t FormatCodeType, f Format, ok bool) {
 }
 
 func determineFormatType(char rune) (FormatCodeType, bool) {
-	if strings.IndexRune(Chars, char) != -1 {
+	if strings.ContainsRune(Chars, char) {
 		return MojangLegacy, true
 	}
 	return 0, false
