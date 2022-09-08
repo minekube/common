@@ -143,10 +143,16 @@ const (
 )
 
 func (j *Json) encodeText(o obj, t *Text) error {
+	if t == nil {
+		return nil
+	}
 	o[text] = t.Content
 	return j.encodeComponent(o, t, extra)
 }
 func (j *Json) encodeTranslation(o obj, t *Translation) error {
+	if t == nil {
+		return nil
+	}
 	o[translate] = t.Key
 	return j.encodeComponent(o, t, translateWith)
 }
@@ -317,7 +323,7 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 			c = &Translation{Key: k}
 		}
 	} else {
-		return nil, errors.New("unknown object, could not find any known key")
+		c = &Text{}
 	}
 
 	if o.Has(extra) {
