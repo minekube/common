@@ -305,7 +305,7 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 		if o.Has(translateWith) {
 			with, ok := o[translateWith].([]interface{})
 			if !ok {
-				return nil, fmt.Errorf(`found invalid translate component, value of key "%s" is not an array`, with)
+				return nil, fmt.Errorf(`found invalid translate component, value of key %q is not an array`, with)
 			}
 			args := make([]Component, 0, len(with))
 			for _, arg := range with {
@@ -327,11 +327,11 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 	}
 
 	if o.Has(extra) {
-		extra, ok := o[extra].([]interface{})
+		ext, ok := o[extra].([]interface{})
 		if !ok {
-			return nil, fmt.Errorf(`value of key "%s" is not an array`, extra)
+			return nil, fmt.Errorf(`value of key %q is not an array, but %T`, extra, o[extra])
 		}
-		for _, e := range extra {
+		for _, e := range ext {
 			ex, err := j.decodeFromInterface(e)
 			if err != nil {
 				return nil, err
@@ -355,14 +355,14 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 	if o.Has(font) {
 		k, err := j.decodeKey(o[font])
 		if err != nil {
-			return nil, fmt.Errorf(`error decoding value of "%s" key: %v`, font, err)
+			return nil, fmt.Errorf(`error decoding value of %q key: %v`, font, err)
 		}
 		s.Font = k
 	}
 	if o.Has(color) {
 		c, dec, _, err := j.decodeColor(o[color])
 		if err != nil {
-			return nil, fmt.Errorf(`error decoding value of "%s" key: %v`, color, err)
+			return nil, fmt.Errorf(`error decoding value of %q key: %v`, color, err)
 		}
 		if c != nil {
 			s.Color = c
@@ -376,7 +376,7 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 			if b, ok := o[string(dec)].(bool); ok {
 				s.SetDecoration(dec, StateByBool(b))
 			} else {
-				return nil, fmt.Errorf(`value of key "%s" is not a bool`, dec)
+				return nil, fmt.Errorf(`value of key %q is not a bool, but %T`, dec, o[string(dec)])
 			}
 		}
 	}
@@ -384,21 +384,21 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 		if i, ok := o[insertion].(string); ok {
 			s.Insertion = &i
 		} else {
-			return nil, fmt.Errorf(`value of key "%s" is not a string`, insertion)
+			return nil, fmt.Errorf(`value of key %q is not a string, but %T`, insertion, o[insertion])
 		}
 	}
 
 	if o.Has(clickEvent) {
 		obj, ok := o[clickEvent].(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf(`value of key "%s" is not a json object`, clickEvent)
+			return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, clickEvent, o[clickEvent])
 		}
 		s.ClickEvent = j.decodeClickEvent(obj)
 	}
 	if o.Has(hoverEvent) {
 		obj, ok := o[hoverEvent].(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf(`value of key "%s" is not a json object`, hoverEvent)
+			return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, hoverEvent, o[hoverEvent])
 		}
 		s.HoverEvent, err = j.decodeHoverEvent(obj)
 		if err != nil {
@@ -435,38 +435,42 @@ func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 	return NewHoverEvent(hoverAction, value), nil
 }
 
+var errUnsupportedHoverEventAction = errors.New("unsupported hover event action")
+
 func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (value interface{}, err error) {
 	var o obj
-	if s, ok := v.(string); ok {
+
+	switch t := v.(type) {
+	case map[string]interface{}:
+		o = t
+	case string:
 		// decode from legacy hover event value key which is json like "contents" but in a string
-		switch action {
-		case ShowTextAction:
-			text, err := j.Unmarshal([]byte(s))
+		switch {
+		case equalFold(ShowTextAction, action):
+			text, err := j.Unmarshal([]byte(t))
 			if err != nil {
 				return nil, err
 			}
 			return text, nil
-		case ShowEntityAction, ShowItemAction:
+		case equalFoldAny(action, ShowEntityAction, ShowItemAction):
 			m := obj{}
-			if err := json.Unmarshal([]byte(s), &m); err != nil {
+			if err := json.Unmarshal([]byte(t), &m); err != nil {
 				return nil, err
 			}
 			o = m
+		default:
+			return nil, fmt.Errorf("%w: %s", errUnsupportedHoverEventAction, action)
 		}
+	default:
+		return nil, fmt.Errorf(
+			`hover event's value of key %q is not a json object nor string, but %T`,
+			hoverEventContents, v)
 	}
 
-	if o == nil {
-		m, ok := v.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf(`hover event's value of key "%s" is not a json object`, hoverEventContents)
-		}
-		o = m
-	}
-
-	switch action {
-	case ShowTextAction:
+	switch {
+	case equalFold(ShowTextAction, action):
 		return j.decodeComponent(o)
-	case ShowItemAction:
+	case equalFold(ShowItemAction, action):
 		if !o.Has(itemId) {
 			return nil, fmt.Errorf(`show item hover event misses key %q`, itemId)
 		}
@@ -478,7 +482,8 @@ func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (valu
 		if o.Has(itemCount) {
 			f, ok := o[itemCount].(float64)
 			if !ok {
-				return nil, fmt.Errorf(`show entity hover event's value of key %q is not a number`, itemCount)
+				return nil, fmt.Errorf(`show entity hover event's value of key %q is not a number, but %T`,
+					itemCount, o[itemCount])
 			}
 			h.Count = int(f)
 		} else {
@@ -487,12 +492,13 @@ func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (valu
 		if o.Has(itemTag) {
 			s, ok := o[itemTag].(string)
 			if !ok {
-				return nil, fmt.Errorf(`show entity hover event's value of key %q is not a string`, itemTag)
+				return nil, fmt.Errorf(`show entity hover event's value of key %q is not a string, but %T`,
+					itemTag, o[itemTag])
 			}
 			h.NBT = nbt.NewBinaryTagHolder(s)
 		}
 		return &h, nil
-	case ShowEntityAction:
+	case equalFold(ShowEntityAction, action):
 		if !o.Has(entityType) || !o.Has(entityId) {
 			return nil, fmt.Errorf(`show entity hover event misses keys %q and/or %q`, entityType, entityId)
 		}
@@ -513,7 +519,7 @@ func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (valu
 		}
 		return &h, nil
 	}
-	return nil, errors.New("decode: unsupported hover event contents") // unsupported hover event contents
+	return nil, fmt.Errorf("%w: %s", errUnsupportedHoverEventAction, action)
 }
 
 // may return nil in case object has missing/invalid keys to decode a ClickEvent or Readable() == false
@@ -621,5 +627,18 @@ func (a arr) MarshalJSONArray(enc *gojay.Encoder) {
 }
 
 func (a arr) IsNil() bool {
+	return false
+}
+
+func equalFold(a, b HoverAction) bool {
+	return a == b || strings.EqualFold(a.Name(), b.Name())
+}
+
+func equalFoldAny(s HoverAction, any ...HoverAction) bool {
+	for _, a := range any {
+		if equalFold(s, a) {
+			return true
+		}
+	}
 	return false
 }

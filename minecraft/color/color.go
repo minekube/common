@@ -73,6 +73,7 @@ var (
 	Yellow      = &Named{"yellow", yellowRGB}
 	White       = &Named{"white", whiteRGB}
 
+	// NamesOrder is the order of the named colors.
 	NamesOrder = []*Named{
 		Black,
 		DarkBlue,
@@ -92,6 +93,7 @@ var (
 		White,
 	}
 
+	// Names is a map of the named colors.
 	Names = func() map[string]*Named {
 		m := map[string]*Named{}
 		for _, a := range NamesOrder {
@@ -152,7 +154,7 @@ func (c *RGB) NearestNamed() *Named {
 	return match
 }
 
-// Make constructs a RGB from Go's color.Color interface.
+// Make constructs an RGB from Go's color.Color interface.
 func Make(c color.Color) (*RGB, bool) {
 	col, ok := colorful.MakeColor(c)
 	return (*RGB)(&col), ok
@@ -216,6 +218,7 @@ func Hex(hex string) (col *RGB, err error) {
 
 }
 
+// HexInt parses a web color given by its hex RGB format.
 func HexInt(hex int) *RGB {
 	var c color.RGBA
 	c.A = 0xff
