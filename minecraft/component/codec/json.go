@@ -271,30 +271,34 @@ func (j *Json) encodeColor(c col.Color) (s string) {
 
 func (j *Json) decodeFromInterface(i interface{}) (Component, error) {
 	switch t := i.(type) {
+	case map[string]interface{}:
+		return j.decodeComponent(t)
 	case string:
 		return &Text{Content: t}, nil
 	case []interface{}:
-		var parent Component
-		for _, child := range t {
-			c, err := j.decodeFromInterface(child)
-			if err != nil {
-				return nil, err
-			}
-			if parent == nil {
-				parent = c
-			} else {
-				parent.SetChildren(append(parent.Children(), c))
-			}
-		}
-		if parent == nil {
-			return nil, errors.New("component array must not be empty")
-		}
-		return parent, nil
-	case map[string]interface{}:
-		return j.decodeComponent(t)
+		return j.decodeFromInterfaceSlice(t)
 	default:
 		return nil, fmt.Errorf("codec.Json unmarshal: json input unmarshalled to unsupported type %T", i)
 	}
+}
+
+func (j *Json) decodeFromInterfaceSlice(i []interface{}) (Component, error) {
+	var parent Component
+	for _, child := range i {
+		c, err := j.decodeFromInterface(child)
+		if err != nil {
+			return nil, err
+		}
+		if parent == nil {
+			parent = c
+		} else {
+			parent.SetChildren(append(parent.Children(), c))
+		}
+	}
+	if parent == nil {
+		return nil, errors.New("component array must not be empty")
+	}
+	return parent, nil
 }
 
 func (j *Json) decodeComponent(o obj) (c Component, err error) {
@@ -443,23 +447,21 @@ func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (valu
 	switch t := v.(type) {
 	case map[string]interface{}:
 		o = t
+	case []interface{}:
+		return j.decodeFromInterfaceSlice(t)
 	case string:
 		// decode from legacy hover event value key which is json like "contents" but in a string
 		switch {
 		case equalFold(ShowTextAction, action):
-			text, err := j.Unmarshal([]byte(t))
-			if err != nil {
-				return nil, err
-			}
-			return text, nil
+			return j.Unmarshal([]byte(t))
 		case equalFoldAny(action, ShowEntityAction, ShowItemAction):
 			m := obj{}
-			if err := json.Unmarshal([]byte(t), &m); err != nil {
+			if err = json.Unmarshal([]byte(t), &m); err != nil {
 				return nil, err
 			}
 			o = m
 		default:
-			return nil, fmt.Errorf("%w: %s", errUnsupportedHoverEventAction, action)
+			return nil, fmt.Errorf("%w: %s of type %T", errUnsupportedHoverEventAction, action, v)
 		}
 	default:
 		return nil, fmt.Errorf(
