@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image/color"
 	"math"
-	"strconv"
 	"strings"
 
 	"github.com/lucasb-eyer/go-colorful"
@@ -174,47 +173,47 @@ func Hex(hex string) (col *RGB, err error) {
 	}
 	hex = strings.TrimPrefix(hex, "#")
 
-	if true {
-		var c color.RGBA
-		c.A = 0xff
+	//if true {
+	var c color.RGBA
+	c.A = 0xff
 
-		hexToByte := func(b byte) byte {
-			switch {
-			case b >= '0' && b <= '9':
-				return b - '0'
-			case b >= 'a' && b <= 'f':
-				return b - 'a' + 10
-			case b >= 'A' && b <= 'F':
-				return b - 'A' + 10
-			}
-			err = InvalidFormatErr
-			return 0
+	hexToByte := func(b byte) byte {
+		switch {
+		case b >= '0' && b <= '9':
+			return b - '0'
+		case b >= 'a' && b <= 'f':
+			return b - 'a' + 10
+		case b >= 'A' && b <= 'F':
+			return b - 'A' + 10
 		}
-
-		switch len(hex) {
-		case 6:
-			c.R = hexToByte(hex[0])<<4 + hexToByte(hex[1])
-			c.G = hexToByte(hex[2])<<4 + hexToByte(hex[3])
-			c.B = hexToByte(hex[4])<<4 + hexToByte(hex[5])
-		case 3:
-			c.R = hexToByte(hex[0]) * 17
-			c.G = hexToByte(hex[1]) * 17
-			c.B = hexToByte(hex[2]) * 17
-		default:
-			err = InvalidFormatErr
-		}
-		if err != nil {
-			return
-		}
-		col, _ := colorful.MakeColor(c)
-		return (*RGB)(&col), nil
-	} else {
-		values, err := strconv.ParseInt(hex, 16, 32)
-		if err != nil {
-			return col, InvalidFormatErr
-		}
-		return HexInt(int(values)), nil
+		err = InvalidFormatErr
+		return 0
 	}
+
+	switch len(hex) {
+	case 6:
+		c.R = hexToByte(hex[0])<<4 + hexToByte(hex[1])
+		c.G = hexToByte(hex[2])<<4 + hexToByte(hex[3])
+		c.B = hexToByte(hex[4])<<4 + hexToByte(hex[5])
+	case 3:
+		c.R = hexToByte(hex[0]) * 17
+		c.G = hexToByte(hex[1]) * 17
+		c.B = hexToByte(hex[2]) * 17
+	default:
+		err = InvalidFormatErr
+	}
+	if err != nil {
+		return
+	}
+	co, _ := colorful.MakeColor(c)
+	return (*RGB)(&co), nil
+	//} else {
+	//	values, err := strconv.ParseInt(hex, 16, 32)
+	//	if err != nil {
+	//		return col, InvalidFormatErr
+	//	}
+	//	return HexInt(int(values)), nil
+	//}
 
 }
 

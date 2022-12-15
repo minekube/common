@@ -1,5 +1,10 @@
-// Is is recommended to make this package a dot import alias to keep code clean.
+// Package component provides a way to represent Minecraft text components.
+// Use dot import alias to keep your code lean when using structs a lot from this package.
 package component
+
+import (
+	"encoding/json"
+)
 
 type Component interface {
 	Children() []Component
@@ -38,3 +43,15 @@ func (t *Translation) Style() *Style {
 func (t *Translation) SetChildren(children []Component) {
 	t.With = children
 }
+
+var (
+	_ json.Marshaler   = (*Text)(nil)
+	_ json.Unmarshaler = (*Text)(nil)
+	_ json.Marshaler   = (*Translation)(nil)
+	_ json.Unmarshaler = (*Translation)(nil)
+)
+
+func (t *Text) MarshalJSON() ([]byte, error)        { panic("use codec.Json instead") }
+func (t *Text) UnmarshalJSON(b []byte) error        { panic("use codec.Json instead") }
+func (t *Translation) UnmarshalJSON(b []byte) error { panic("use codec.Json instead") }
+func (t *Translation) MarshalJSON() ([]byte, error) { panic("use codec.Json instead") }
