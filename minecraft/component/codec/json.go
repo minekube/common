@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/francoispqt/gojay"
@@ -377,11 +378,19 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 	}
 	for dec := range Decorations {
 		if o.Has(string(dec)) {
-			if b, ok := o[string(dec)].(bool); ok {
-				s.SetDecoration(dec, StateByBool(b))
-			} else {
+			var b bool
+			switch v := o[string(dec)].(type) {
+			case string:
+				b, err = strconv.ParseBool(v)
+				if err != nil {
+					return nil, fmt.Errorf(`value of key %q is not a bool, but %T: %s`, dec, o[string(dec)], v)
+				}
+			case bool:
+				b = v
+			default:
 				return nil, fmt.Errorf(`value of key %q is not a bool, but %T`, dec, o[string(dec)])
 			}
+			s.SetDecoration(dec, StateByBool(b))
 		}
 	}
 	if o.Has(insertion) {
