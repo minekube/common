@@ -67,6 +67,18 @@ func CopyToClipboard(text string) ClickEvent {
 	return &clickEvent{CopyToClipboardAction, text}
 }
 
+func ShowDialog(dialog string) ClickEvent {
+	return &clickEvent{ShowDialogAction, dialog}
+}
+
+func CustomEvent(id string, payload ...string) ClickEvent {
+	value := id
+	if len(payload) > 0 && payload[0] != "" {
+		value = id + "|" + payload[0]
+	}
+	return &clickEvent{CustomEventAction, value}
+}
+
 var (
 	OpenUrlAction         ClickAction = &clickAction{"open_url", true}
 	OpenFileAction        ClickAction = &clickAction{"open_file", false}
@@ -74,6 +86,8 @@ var (
 	SuggestCommandAction  ClickAction = &clickAction{"suggest_command", true}
 	ChangePageAction      ClickAction = &clickAction{"change_page", true}
 	CopyToClipboardAction ClickAction = &clickAction{"copy_to_clipboard", true}
+	ShowDialogAction      ClickAction = &clickAction{"show_dialog", true}
+	CustomEventAction     ClickAction = &clickAction{"custom", true}
 
 	ClickActions = func() map[string]ClickAction {
 		m := map[string]ClickAction{}
@@ -84,6 +98,8 @@ var (
 			SuggestCommandAction,
 			ChangePageAction,
 			CopyToClipboardAction,
+			ShowDialogAction,
+			CustomEventAction,
 		} {
 			m[a.Name()] = a
 		}

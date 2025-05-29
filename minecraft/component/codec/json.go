@@ -46,6 +46,27 @@ type Json struct {
 	//
 	// It is false by default to support older client versions.
 	NoLegacyHover bool
+	// Since Minecraft 1.21.5+ field names changed from camelCase to snake_case.
+	// This setting decides whether to use the legacy camelCase field names (clickEvent, hoverEvent)
+	// instead of the new snake_case field names (click_event, hover_event).
+	//
+	// This setting is false by default to use the new format (1.21.5+).
+	// Set to true for compatibility with clients before 1.21.5.
+	UseLegacyFieldNames bool
+	// Since Minecraft 1.21.5+ click event field structure changed.
+	// The "value" field was renamed to more specific names like "url", "path", "command", "page".
+	// This setting decides whether to use the legacy "value" field structure.
+	//
+	// This setting is false by default to use the new format (1.21.5+).
+	// Set to true for compatibility with clients before 1.21.5.
+	UseLegacyClickEventStructure bool
+	// Since Minecraft 1.21.5+ hover event field structure changed.
+	// The "contents" field was inlined and some field names changed.
+	// This setting decides whether to use the legacy "contents" field structure.
+	//
+	// This setting is false by default to use the new format (1.21.5+).
+	// Set to true for compatibility with clients before 1.21.5.
+	UseLegacyHoverEventStructure bool
 	// Whether to use Go's standard json library for marshalling.
 	// It can be set to true if features such as key sorting in objects is needed
 	// (e.g. when testing to compare output).
@@ -125,22 +146,53 @@ const (
 	color     = "color"
 	insertion = "insertion"
 
-	clickEvent       = "clickEvent"
-	clickEventAction = "action"
-	clickEventValue  = "value"
+	// New format (1.21.5+): snake_case field names
+	clickEvent = "click_event"
+	hoverEvent = "hover_event"
 
-	hoverEvent         = "hoverEvent"
-	hoverEventAction   = "action"
+	// Legacy format (pre-1.21.5): camelCase field names
+	clickEventLegacy = "clickEvent"
+	hoverEventLegacy = "hoverEvent"
+
+	// Common field names used in both formats
+	clickEventAction = "action"
+	hoverEventAction = "action"
+
+	// Legacy click event structure (pre-1.21.5)
+	clickEventValue = "value"
+
+	// New click event structure (1.21.5+) - specific field names
+	clickEventUrl     = "url"     // for open_url action
+	clickEventPath    = "path"    // for open_file action
+	clickEventCommand = "command" // for run_command and suggest_command actions
+	clickEventPage    = "page"    // for change_page action
+
+	// New actions in 1.21.6+
+	clickEventDialog  = "dialog"  // for show_dialog action
+	clickEventId      = "id"      // for custom action
+	clickEventPayload = "payload" // for custom action (optional)
+
+	// Legacy hover event structure (pre-1.21.5)
 	hoverEventValue    = "value"
 	hoverEventContents = "contents"
 
+	// New hover event structure (1.21.5+) - inlined fields
+	// For show_text action
+	hoverEventText = "value" // Note: was "text" in 25w02a, changed back to "value" in 25w03a
+
+	// For show_item action (inlined from contents)
 	itemId    = "id"
 	itemCount = "count"
 	itemTag   = "tag"
 
-	entityId   = "id"
-	entityType = "type"
+	// For show_entity action (inlined from contents, with field renames)
+	entityType = "id"   // renamed from "type" in 1.21.5+
+	entityUuid = "uuid" // renamed from "id" in 1.21.5+
 	entityName = "name"
+
+	// Legacy show_entity field names (pre-1.21.5)
+	entityTypeLegacy = "type"
+	entityIdLegacy   = "id"
 )
 
 func (j *Json) encodeText(o obj, t *Text) error {
@@ -199,10 +251,61 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 		o[insertion] = *s.Insertion
 	}
 	if s.ClickEvent != nil {
-		o[clickEvent] = obj{
-			clickEventAction: s.ClickEvent.Action().Name(),
-			clickEventValue:  s.ClickEvent.Value(),
+		clickEventKey := clickEvent
+		if j.UseLegacyFieldNames {
+			clickEventKey = clickEventLegacy
 		}
+
+		clickEventObj := obj{
+			clickEventAction: s.ClickEvent.Action().Name(),
+		}
+
+		// Handle different field structures based on version
+		if j.UseLegacyClickEventStructure {
+			// Legacy structure: use "value" field for all actions
+			clickEventObj[clickEventValue] = s.ClickEvent.Value()
+		} else {
+			// New structure: use specific field names based on action
+			switch s.ClickEvent.Action().Name() {
+			case "open_url":
+				clickEventObj[clickEventUrl] = s.ClickEvent.Value()
+			case "open_file":
+				clickEventObj[clickEventPath] = s.ClickEvent.Value()
+			case "run_command", "suggest_command":
+				clickEventObj[clickEventCommand] = s.ClickEvent.Value()
+			case "change_page":
+				// Convert page number to int for new format
+				if pageStr := s.ClickEvent.Value(); pageStr != "" {
+					if pageInt, err := strconv.Atoi(pageStr); err == nil {
+						clickEventObj[clickEventPage] = pageInt
+					} else {
+						// Fallback to string if conversion fails
+						clickEventObj[clickEventPage] = pageStr
+					}
+				}
+			case "copy_to_clipboard":
+				clickEventObj[clickEventValue] = s.ClickEvent.Value() // Still uses "value" in new format
+			case "show_dialog":
+				clickEventObj[clickEventDialog] = s.ClickEvent.Value()
+			case "custom":
+				// For custom actions, we expect the value to contain the ID
+				// and optionally a payload separated by a delimiter (e.g., "|")
+				value := s.ClickEvent.Value()
+				if parts := strings.SplitN(value, "|", 2); len(parts) >= 1 {
+					clickEventObj[clickEventId] = parts[0]
+					if len(parts) == 2 && parts[1] != "" {
+						clickEventObj[clickEventPayload] = parts[1]
+					}
+				} else {
+					clickEventObj[clickEventId] = value
+				}
+			default:
+				// Unknown action, use value field as fallback
+				clickEventObj[clickEventValue] = s.ClickEvent.Value()
+			}
+		}
+
+		o[clickEventKey] = clickEventObj
 	}
 	if s.HoverEvent != nil {
 		eventObj := obj{}
@@ -210,44 +313,95 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 			return err
 		}
 		if len(eventObj) != 0 {
-			o[hoverEvent] = eventObj
+			hoverEventKey := hoverEvent
+			if j.UseLegacyFieldNames {
+				hoverEventKey = hoverEventLegacy
+			}
+			o[hoverEventKey] = eventObj
 		}
 	}
 	return nil
 }
 
 func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
-	var value obj
-	switch t := event.Value().(type) {
-	case *Text:
-		value = obj{}
-		if err := j.encode(value, t); err != nil {
-			return err
+	o[hoverEventAction] = event.Action().Name()
+
+	switch event.Action().Name() {
+	case "show_text":
+		switch t := event.Value().(type) {
+		case *Text:
+			if j.UseLegacyHoverEventStructure {
+				// Legacy structure: use "contents" field
+				textObj := obj{}
+				if err := j.encode(textObj, t); err != nil {
+					return err
+				}
+				o[hoverEventContents] = textObj
+				if !j.NoLegacyHover {
+					o[hoverEventValue] = textObj
+				}
+			} else {
+				// New structure: inline the text component as "value"
+				textObj := obj{}
+				if err := j.encode(textObj, t); err != nil {
+					return err
+				}
+				o[hoverEventText] = textObj
+			}
 		}
-	case *ShowItemHoverType:
-		value = obj{
-			itemTag:   t.Item.String(),
-			itemCount: t.Count,
-			itemId:    t.NBT.String(),
+
+	case "show_item":
+		switch t := event.Value().(type) {
+		case *ShowItemHoverType:
+			if j.UseLegacyHoverEventStructure {
+				// Legacy structure: use "contents" field
+				itemObj := obj{
+					itemId:    t.Item.String(),
+					itemCount: t.Count,
+					itemTag:   t.NBT.String(),
+				}
+				o[hoverEventContents] = itemObj
+				if !j.NoLegacyHover {
+					o[hoverEventValue] = itemObj
+				}
+			} else {
+				// New structure: inline the item data directly
+				o[itemId] = t.Item.String()
+				o[itemCount] = t.Count
+				if t.NBT != nil {
+					o[itemTag] = t.NBT.String()
+				}
+			}
 		}
-	case *ShowEntityHoverType:
-		name := obj{}
-		if err := j.encode(name, t.Name); err != nil {
-			return err
-		}
-		value = obj{
-			entityType: t.Type.String(),
-			entityId:   t.Id.String(),
-			entityName: name,
+
+	case "show_entity":
+		switch t := event.Value().(type) {
+		case *ShowEntityHoverType:
+			nameObj := obj{}
+			if err := j.encode(nameObj, t.Name); err != nil {
+				return err
+			}
+
+			if j.UseLegacyHoverEventStructure {
+				// Legacy structure: use "contents" field with old field names
+				entityObj := obj{
+					entityTypeLegacy: t.Type.String(),
+					entityIdLegacy:   t.Id.String(),
+					entityName:       nameObj,
+				}
+				o[hoverEventContents] = entityObj
+				if !j.NoLegacyHover {
+					o[hoverEventValue] = entityObj
+				}
+			} else {
+				// New structure: inline the entity data with new field names
+				o[entityType] = t.Type.String()
+				o[entityUuid] = t.Id.String()
+				o[entityName] = nameObj
+			}
 		}
 	}
-	if value != nil {
-		o[hoverEventAction] = event.Action().Name()
-		o[hoverEventContents] = value
-		if !j.NoLegacyHover {
-			o[hoverEventValue] = value
-		}
-	}
+
 	return nil
 }
 
@@ -401,17 +555,44 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 		}
 	}
 
-	if o.Has(clickEvent) {
-		obj, ok := o[clickEvent].(map[string]interface{})
+	// Support both new (click_event) and legacy (clickEvent) field names for maximum compatibility
+	if o.Has(clickEvent) || o.Has(clickEventLegacy) {
+		var obj map[string]interface{}
+		var ok bool
+		var fieldName string
+
+		// Try new format first, then fall back to legacy format
+		if o.Has(clickEvent) {
+			obj, ok = o[clickEvent].(map[string]interface{})
+			fieldName = clickEvent
+		} else {
+			obj, ok = o[clickEventLegacy].(map[string]interface{})
+			fieldName = clickEventLegacy
+		}
+
 		if !ok {
-			return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, clickEvent, o[clickEvent])
+			return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, fieldName, o[fieldName])
 		}
 		s.ClickEvent = j.decodeClickEvent(obj)
 	}
-	if o.Has(hoverEvent) {
-		obj, ok := o[hoverEvent].(map[string]interface{})
+
+	// Support both new (hover_event) and legacy (hoverEvent) field names for maximum compatibility
+	if o.Has(hoverEvent) || o.Has(hoverEventLegacy) {
+		var obj map[string]interface{}
+		var ok bool
+		var fieldName string
+
+		// Try new format first, then fall back to legacy format
+		if o.Has(hoverEvent) {
+			obj, ok = o[hoverEvent].(map[string]interface{})
+			fieldName = hoverEvent
+		} else {
+			obj, ok = o[hoverEventLegacy].(map[string]interface{})
+			fieldName = hoverEventLegacy
+		}
+
 		if !ok {
-			return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, hoverEvent, o[hoverEvent])
+			return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, fieldName, o[fieldName])
 		}
 		s.HoverEvent, err = j.decodeHoverEvent(obj)
 		if err != nil {
@@ -434,17 +615,115 @@ func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 	if !ok || !hoverAction.Readable() {
 		return nil, nil
 	}
+
 	var value interface{}
-	if o.Has(hoverEventContents) {
-		value, err = j.decodeHoverEventContents(o[hoverEventContents], hoverAction)
-	} else if o.Has(hoverEventValue) {
-		value, err = j.decodeHoverEventContents(o[hoverEventValue], hoverAction)
-	} else {
-		return nil, nil
+
+	// Try different structures based on action type and available fields
+	switch action {
+	case "show_text":
+		// For show_text, try different field names
+		if o.Has(hoverEventText) {
+			// New structure (1.21.5+): direct "value" field
+			value, err = j.decodeFromInterface(o[hoverEventText])
+		} else if o.Has(hoverEventContents) {
+			// Legacy structure: "contents" field
+			value, err = j.decodeFromInterface(o[hoverEventContents])
+		} else if o.Has(hoverEventValue) {
+			// Very old legacy structure: "value" field
+			value, err = j.decodeHoverEventContents(o[hoverEventValue], hoverAction)
+		}
+
+	case "show_item":
+		// Check if it's the new inlined structure (has direct id/count fields) or legacy structure
+		if o.Has(itemId) && !o.Has(hoverEventContents) && !o.Has(hoverEventValue) {
+			// New inlined structure (1.21.5+) - process directly here
+			var h ShowItemHoverType
+			h.Item, err = j.decodeKey(o[itemId])
+			if err != nil {
+				return nil, err
+			}
+			if o.Has(itemCount) {
+				f, ok := o[itemCount].(float64)
+				if !ok {
+					return nil, fmt.Errorf(`show item hover event's value of key %q is not a number, but %T`,
+						itemCount, o[itemCount])
+				}
+				h.Count = int(f)
+			} else {
+				h.Count = 1
+			}
+			if o.Has(itemTag) {
+				s, ok := o[itemTag].(string)
+				if !ok {
+					return nil, fmt.Errorf(`show item hover event's value of key %q is not a string, but %T`,
+						itemTag, o[itemTag])
+				}
+				h.NBT = nbt.NewBinaryTagHolder(s)
+			}
+			value = &h
+		} else if o.Has(hoverEventContents) {
+			// Legacy structure: "contents" field
+			value, err = j.decodeHoverEventContents(o[hoverEventContents], hoverAction)
+		} else if o.Has(hoverEventValue) {
+			// Very old legacy structure: "value" field
+			value, err = j.decodeHoverEventContents(o[hoverEventValue], hoverAction)
+		}
+
+	case "show_entity":
+		// Check if it's the new inlined structure or legacy structure
+		if (o.Has(entityType) || o.Has(entityTypeLegacy)) && !o.Has(hoverEventContents) && !o.Has(hoverEventValue) {
+			// New inlined structure (1.21.5+) - process directly here
+			var entityTypeField, entityIdField string
+			if o.Has(entityType) && o.Has(entityUuid) {
+				entityTypeField = entityType
+				entityIdField = entityUuid
+			} else if o.Has(entityTypeLegacy) && o.Has(entityIdLegacy) {
+				entityTypeField = entityTypeLegacy
+				entityIdField = entityIdLegacy
+			} else {
+				return nil, nil
+			}
+
+			var h ShowEntityHoverType
+			h.Type, err = j.decodeKey(o[entityTypeField])
+			if err != nil {
+				return nil, err
+			}
+			h.Id, err = j.decodeUUID(o[entityIdField])
+			if err != nil {
+				return nil, err
+			}
+			if o.Has(entityName) {
+				h.Name, err = j.decodeFromInterface(o[entityName])
+				if err != nil {
+					return nil, err
+				}
+			}
+			value = &h
+		} else if o.Has(hoverEventContents) {
+			// Legacy structure: "contents" field
+			value, err = j.decodeHoverEventContents(o[hoverEventContents], hoverAction)
+		} else if o.Has(hoverEventValue) {
+			// Very old legacy structure: "value" field
+			value, err = j.decodeHoverEventContents(o[hoverEventValue], hoverAction)
+		}
+
+	default:
+		// Unknown action, try legacy fields
+		if o.Has(hoverEventContents) {
+			value, err = j.decodeHoverEventContents(o[hoverEventContents], hoverAction)
+		} else if o.Has(hoverEventValue) {
+			value, err = j.decodeHoverEventContents(o[hoverEventValue], hoverAction)
+		}
 	}
+
 	if err != nil {
 		return nil, err
 	}
+	if value == nil {
+		return nil, nil
+	}
+
 	return NewHoverEvent(hoverAction, value), nil
 }
 
@@ -510,15 +789,30 @@ func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (valu
 		}
 		return &h, nil
 	case equalFold(ShowEntityAction, action):
-		if !o.Has(entityType) || !o.Has(entityId) {
-			return nil, fmt.Errorf(`show entity hover event misses keys %q and/or %q`, entityType, entityId)
+		// Try new field names first (1.21.5+)
+		var entityTypeField, entityIdField string
+		if o.Has(entityType) && o.Has(entityUuid) {
+			entityTypeField = entityType
+			entityIdField = entityUuid
+		} else if o.Has(entityTypeLegacy) && o.Has(entityIdLegacy) {
+			// Fallback to legacy field names (pre-1.21.5)
+			entityTypeField = entityTypeLegacy
+			entityIdField = entityIdLegacy
+		} else {
+			// Check what fields are available for error message
+			availableFields := []string{}
+			for k := range o {
+				availableFields = append(availableFields, k)
+			}
+			return nil, fmt.Errorf(`show entity hover event misses required keys. Available fields: %v`, availableFields)
 		}
+
 		var h ShowEntityHoverType
-		h.Type, err = j.decodeKey(o[entityType])
+		h.Type, err = j.decodeKey(o[entityTypeField])
 		if err != nil {
 			return nil, err
 		}
-		h.Id, err = j.decodeUUID(o[entityId])
+		h.Id, err = j.decodeUUID(o[entityIdField])
 		if err != nil {
 			return nil, err
 		}
@@ -535,7 +829,7 @@ func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (valu
 
 // may return nil in case object has missing/invalid keys to decode a ClickEvent or Readable() == false
 func (j *Json) decodeClickEvent(o obj) ClickEvent {
-	if !o.Has(clickEventAction) || !o.Has(clickEventValue) {
+	if !o.Has(clickEventAction) {
 		return nil
 	}
 	action, ok := o[clickEventAction].(string)
@@ -546,10 +840,82 @@ func (j *Json) decodeClickEvent(o obj) ClickEvent {
 	if !ok || !clickAction.Readable() {
 		return nil
 	}
-	value, ok := o[clickEventValue].(string)
-	if !ok {
+
+	// Try to extract value using different field names based on action and version
+	var value string
+
+	// First try the legacy "value" field (works for all versions)
+	if o.Has(clickEventValue) {
+		if v, ok := o[clickEventValue].(string); ok {
+			value = v
+		}
+	}
+
+	// Then try the new specific field names (1.21.5+)
+	if value == "" {
+		switch action {
+		case "open_url":
+			if o.Has(clickEventUrl) {
+				if v, ok := o[clickEventUrl].(string); ok {
+					value = v
+				}
+			}
+		case "open_file":
+			if o.Has(clickEventPath) {
+				if v, ok := o[clickEventPath].(string); ok {
+					value = v
+				}
+			}
+		case "run_command", "suggest_command":
+			if o.Has(clickEventCommand) {
+				if v, ok := o[clickEventCommand].(string); ok {
+					value = v
+				}
+			}
+		case "change_page":
+			if o.Has(clickEventPage) {
+				// Handle both string and int formats
+				switch v := o[clickEventPage].(type) {
+				case string:
+					value = v
+				case int:
+					value = strconv.Itoa(v)
+				case float64:
+					value = strconv.Itoa(int(v))
+				}
+			}
+		case "copy_to_clipboard":
+			// copy_to_clipboard still uses "value" field in new format
+			if o.Has(clickEventValue) {
+				if v, ok := o[clickEventValue].(string); ok {
+					value = v
+				}
+			}
+		case "show_dialog":
+			if o.Has(clickEventDialog) {
+				if v, ok := o[clickEventDialog].(string); ok {
+					value = v
+				}
+			}
+		case "custom":
+			// For custom actions, reconstruct the value from id and optional payload
+			if o.Has(clickEventId) {
+				if id, ok := o[clickEventId].(string); ok {
+					value = id
+					if o.Has(clickEventPayload) {
+						if payload, ok := o[clickEventPayload].(string); ok && payload != "" {
+							value = id + "|" + payload
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if value == "" {
 		return nil
 	}
+
 	return NewClickEvent(clickAction, value)
 }
 
