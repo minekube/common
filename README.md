@@ -163,11 +163,10 @@ customComponent := &component.Text{
 - **Performance optimized**: Much faster than Go's standard JSON encoding
 - **Comprehensive testing**: Extensive test coverage for all versions and formats
 
-### 🧪 Testing
+### 🧪 Testing, formatting, linting
 
 ```bash
-cd minecraft/component/codec
-go test -v
+make
 ```
 
 All format variations and cross-compatibility scenarios are thoroughly tested to ensure reliability across all Minecraft versions.
