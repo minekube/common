@@ -16,44 +16,13 @@ import (
 // Test configurations for different Minecraft versions
 
 // Pre-1.21.5 format: camelCase field names with legacy structures
-var jPre1215 = &Json{
-	NoLegacyHover:                false, // Include both contents and value for compatibility
-	NoDownsampleColor:            true,
-	UseLegacyFieldNames:          true, // Use camelCase (clickEvent, hoverEvent)
-	UseLegacyClickEventStructure: true, // Use "value" field for click events
-	UseLegacyHoverEventStructure: true, // Use "contents" field for hover events
-	StdJson:                      true,
-}
+var jPre1215 = JsonPre1_21_5
 
 // 1.21.5+ format: snake_case field names with new structures
-var j1215Plus = &Json{
-	NoLegacyHover:                true, // Only new format, no legacy "value" field
-	NoDownsampleColor:            true,
-	UseLegacyFieldNames:          false, // Use snake_case (click_event, hover_event)
-	UseLegacyClickEventStructure: false, // Use specific fields (url, path, command, page)
-	UseLegacyHoverEventStructure: false, // Use inlined structure
-	StdJson:                      true,
-}
+var j1215Plus = JsonModern
 
 // Compatibility decoder: can decode all formats but encodes in new format
-var jCompat = &Json{
-	NoLegacyHover:                true,
-	NoDownsampleColor:            true,
-	UseLegacyFieldNames:          false, // Encode with new format
-	UseLegacyClickEventStructure: false, // Encode with new structure
-	UseLegacyHoverEventStructure: false, // Encode with new structure
-	StdJson:                      true,
-}
-
-// Legacy decoder: can decode all formats but encodes in legacy format
-var jLegacyCompat = &Json{
-	NoLegacyHover:                false, // Include legacy fields for compatibility
-	NoDownsampleColor:            true,
-	UseLegacyFieldNames:          true, // Encode with legacy format
-	UseLegacyClickEventStructure: true, // Encode with legacy structure
-	UseLegacyHoverEventStructure: true, // Encode with legacy structure
-	StdJson:                      true,
-}
+var jCompat = JsonUniversal
 
 func BenchmarkJson_Marshal(b *testing.B) {
 	insertion := "insert me"
@@ -604,6 +573,176 @@ func TestJson_HoverEvent_AllActions(t *testing.T) {
 			decoded2, err := jPre1215.Unmarshal([]byte(newJSON))
 			require.NoError(t, err)
 			require.Equal(t, component, decoded2)
+		})
+	})
+}
+
+// TestJSONOptions tests the various JSON options and configurations
+func TestJSONOptions(t *testing.T) {
+	// Test EMIT_DEFAULT_ITEM_HOVER_QUANTITY option
+	t.Run("emit_default_item_hover_quantity", func(t *testing.T) {
+		diamond, _ := key.Parse("minecraft:diamond")
+		component := &Text{
+			Content: "Hover for item",
+			S: Style{
+				HoverEvent: ShowItem(&ShowItemHoverType{
+					Item:  diamond,
+					Count: 1, // Default count
+					NBT:   nil,
+				}),
+			},
+		}
+
+		// Test with EmitDefaultItemHoverQuantity = false (default)
+		t.Run("default_false", func(t *testing.T) {
+			codec := &Json{
+				NoLegacyHover:                false,
+				NoDownsampleColor:            true,
+				UseLegacyFieldNames:          true,
+				UseLegacyClickEventStructure: true,
+				UseLegacyHoverEventStructure: true,
+				EmitDefaultItemHoverQuantity: false, // Don't emit count=1
+				StdJson:                      true,
+			}
+
+			encoded := new(strings.Builder)
+			err := codec.Marshal(encoded, component)
+			require.NoError(t, err)
+
+			// Should NOT contain count field when count=1 and EmitDefaultItemHoverQuantity=false
+			require.NotContains(t, encoded.String(), `"count":1`)
+			require.Contains(t, encoded.String(), `"id":"minecraft:diamond"`)
+		})
+
+		// Test with EmitDefaultItemHoverQuantity = true
+		t.Run("emit_true", func(t *testing.T) {
+			codec := &Json{
+				NoLegacyHover:                false,
+				NoDownsampleColor:            true,
+				UseLegacyFieldNames:          true,
+				UseLegacyClickEventStructure: true,
+				UseLegacyHoverEventStructure: true,
+				EmitDefaultItemHoverQuantity: true, // Emit count=1
+				StdJson:                      true,
+			}
+
+			encoded := new(strings.Builder)
+			err := codec.Marshal(encoded, component)
+			require.NoError(t, err)
+
+			// Should contain count field even when count=1
+			require.Contains(t, encoded.String(), `"count":1`)
+			require.Contains(t, encoded.String(), `"id":"minecraft:diamond"`)
+		})
+	})
+
+	// Test EMIT_HOVER_SHOW_ENTITY_KEY_AS_TYPE_AND_UUID_AS_ID option
+	t.Run("emit_hover_show_entity_field_names", func(t *testing.T) {
+		uuid := uuid.MustParse("12345678-1234-1234-1234-123456789abc")
+		entityKey, _ := key.Parse("minecraft:player")
+		component := &Text{
+			Content: "Hover for entity",
+			S: Style{
+				HoverEvent: ShowEntity(&ShowEntityHoverType{
+					Type: entityKey,
+					Id:   uuid,
+					Name: &Text{Content: "TestPlayer", S: Style{Color: Blue.RGB}},
+				}),
+			},
+		}
+
+		// Test with EmitHoverShowEntityKeyAsTypeAndUuidAsId = true (legacy field names)
+		t.Run("legacy_field_names", func(t *testing.T) {
+			codec := &Json{
+				NoLegacyHover:                           true,
+				NoDownsampleColor:                       true,
+				UseLegacyFieldNames:                     false, // Use snake_case
+				UseLegacyClickEventStructure:            false,
+				UseLegacyHoverEventStructure:            false, // Use inlined structure
+				EmitHoverShowEntityKeyAsTypeAndUuidAsId: true,  // Use legacy field names
+				StdJson:                                 true,
+			}
+
+			encoded := new(strings.Builder)
+			err := codec.Marshal(encoded, component)
+			require.NoError(t, err)
+
+			// Should use legacy field names even in modern structure
+			require.Contains(t, encoded.String(), `"type":"minecraft:player"`)                   // Legacy field name
+			require.Contains(t, encoded.String(), `"id":"12345678-1234-1234-1234-123456789abc"`) // Legacy field name
+			require.NotContains(t, encoded.String(), `"uuid":"12345678-1234-1234-1234-123456789abc"`)
+		})
+
+		// Test with EmitHoverShowEntityKeyAsTypeAndUuidAsId = false (modern field names)
+		t.Run("modern_field_names", func(t *testing.T) {
+			codec := &Json{
+				NoLegacyHover:                           true,
+				NoDownsampleColor:                       true,
+				UseLegacyFieldNames:                     false, // Use snake_case
+				UseLegacyClickEventStructure:            false,
+				UseLegacyHoverEventStructure:            false, // Use inlined structure
+				EmitHoverShowEntityKeyAsTypeAndUuidAsId: false, // Use modern field names
+				StdJson:                                 true,
+			}
+
+			encoded := new(strings.Builder)
+			err := codec.Marshal(encoded, component)
+			require.NoError(t, err)
+
+			// Should use modern field names
+			require.Contains(t, encoded.String(), `"id":"minecraft:player"`)                       // Modern field name (was "type")
+			require.Contains(t, encoded.String(), `"uuid":"12345678-1234-1234-1234-123456789abc"`) // Modern field name (was "id")
+			require.NotContains(t, encoded.String(), `"type":"minecraft:player"`)
+		})
+	})
+
+	// Test EMIT_CHANGE_PAGE_CLICK_EVENT_PAGE_AS_STRING option
+	t.Run("emit_change_page_as_string", func(t *testing.T) {
+		component := &Text{
+			Content: "Click to change page",
+			S: Style{
+				ClickEvent: ChangePage("3"),
+			},
+		}
+
+		// Test with EmitChangePageClickEventPageAsString = true (legacy string format)
+		t.Run("page_as_string", func(t *testing.T) {
+			codec := &Json{
+				NoLegacyHover:                        false,
+				NoDownsampleColor:                    true,
+				UseLegacyFieldNames:                  false, // Use snake_case
+				UseLegacyClickEventStructure:         false, // Use specific fields
+				EmitChangePageClickEventPageAsString: true,  // Emit as string
+				StdJson:                              true,
+			}
+
+			encoded := new(strings.Builder)
+			err := codec.Marshal(encoded, component)
+			require.NoError(t, err)
+
+			// Should contain page as string
+			require.Contains(t, encoded.String(), `"page":"3"`)
+			require.NotContains(t, encoded.String(), `"page":3`)
+		})
+
+		// Test with EmitChangePageClickEventPageAsString = false (modern integer format)
+		t.Run("page_as_integer", func(t *testing.T) {
+			codec := &Json{
+				NoLegacyHover:                        false,
+				NoDownsampleColor:                    true,
+				UseLegacyFieldNames:                  false, // Use snake_case
+				UseLegacyClickEventStructure:         false, // Use specific fields
+				EmitChangePageClickEventPageAsString: false, // Emit as integer
+				StdJson:                              true,
+			}
+
+			encoded := new(strings.Builder)
+			err := codec.Marshal(encoded, component)
+			require.NoError(t, err)
+
+			// Should contain page as integer
+			require.Contains(t, encoded.String(), `"page":3`)
+			require.NotContains(t, encoded.String(), `"page":"3"`)
 		})
 	})
 }

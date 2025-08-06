@@ -60,20 +60,39 @@ err := j.Marshal(&buf, component)
 
 ### 🎛️ Version Configuration Examples
 
-**Latest Format (1.21.6+):**
+**Using Preset Configurations (Recommended):**
 
 ```go
+import "go.minekube.com/common/minecraft/component/codec"
+
+// For clients before 1.16
+j := codec.JsonPre1_16
+
+// For clients 1.16+ but before 1.20.3
+j := codec.JsonPre1_20_3
+
+// For clients 1.20.3+ but before 1.21.5
+j := codec.JsonPre1_21_5
+
+// For clients 1.21.5+ (latest format)
+j := codec.JsonModern
+
+// Universal compatibility (encodes modern, decodes all)
+j := codec.JsonUniversal
+```
+
+**Manual Configuration:**
+
+```go
+// Latest Format (1.21.6+)
 j := &codec.Json{
     UseLegacyFieldNames:          false, // snake_case: click_event, hover_event
     UseLegacyClickEventStructure: false, // Specific fields: url, path, command, etc.
     UseLegacyHoverEventStructure: false, // Inlined hover structure
     StdJson:                      true,
 }
-```
 
-**Legacy Format (Pre-1.21.5):**
-
-```go
+// Legacy Format (Pre-1.21.5)
 j := &codec.Json{
     UseLegacyFieldNames:          true,  // camelCase: clickEvent, hoverEvent
     UseLegacyClickEventStructure: true,  // Universal "value" field
@@ -83,17 +102,67 @@ j := &codec.Json{
 }
 ```
 
-**Universal Compatibility (Recommended):**
+**Preset Configurations:**
+
+| Preset          | Target Version  | Field Names | Click Events      | Hover Events      | Features                    |
+| --------------- | --------------- | ----------- | ----------------- | ----------------- | --------------------------- |
+| `JsonPre1_16`   | Before 1.16     | camelCase   | Universal "value" | Legacy + value    | Color downsampling          |
+| `JsonPre1_20_3` | 1.16 - 1.20.2   | camelCase   | Universal "value" | Legacy + contents | Hex colors                  |
+| `JsonPre1_21_5` | 1.20.3 - 1.21.4 | camelCase   | Universal "value" | Legacy + contents | Compact text, int UUIDs     |
+| `JsonModern`    | 1.21.5+         | snake_case  | Specific fields   | Inlined           | All modern features         |
+| `JsonUniversal` | Any             | snake_case  | Specific fields   | Inlined           | Decodes all, encodes modern |
+
+### ⚙️ Advanced JSON Configuration Options
+
+For fine-grained control over JSON serialization behavior, additional options are available that correspond to Minecraft's internal JSON serialization flags:
 
 ```go
 j := &codec.Json{
-    // Encodes in modern format but can decode ANY format
-    UseLegacyFieldNames:          false,
-    UseLegacyClickEventStructure: false,
-    UseLegacyHoverEventStructure: false,
-    StdJson:                      true,
+    // Basic structure control
+    UseLegacyFieldNames:          false, // snake_case vs camelCase field names
+    UseLegacyClickEventStructure: false, // Specific fields vs universal "value"
+    UseLegacyHoverEventStructure: false, // Inlined vs "contents" wrapper
+
+    // Version-specific behavior control
+    EmitChangePageClickEventPageAsString:     false, // Page as int (1.21.6+) vs string (legacy)
+    EmitCompactTextComponent:                 true,  // Plain text optimization (1.20.3+)
+    EmitHoverShowEntityIdAsIntArray:          true,  // UUID as int array (1.20.3+) vs string
+    EmitHoverShowEntityKeyAsTypeAndUuidAsId:  false, // Modern ("id"/"uuid") vs legacy ("type"/"id") field names
+    ValidateStrictEvents:                     true,  // Strict event validation (1.20.3+)
+    EmitDefaultItemHoverQuantity:             true,  // Always emit count=1 (1.20.5+)
+
+    // Advanced formatting modes
+    ShowItemHoverDataMode: codec.ShowItemHoverDataModeDataComponents, // Legacy NBT vs modern data components
+    ShadowColorMode:       codec.ShadowColorEmitModeInteger,          // Shadow color format (1.21.4+)
+
+    StdJson: true,
 }
 ```
+
+**Configuration Options:**
+
+| Option                                    | Description                               | Default     | Since Version |
+| ----------------------------------------- | ----------------------------------------- | ----------- | ------------- |
+| `EmitChangePageClickEventPageAsString`    | Emit page numbers as strings vs integers  | `false`     | 1.21.6+       |
+| `EmitCompactTextComponent`                | Use plain text for simple components      | `false`     | 1.20.3+       |
+| `EmitHoverShowEntityIdAsIntArray`         | UUID as `[int, int, int, int]` vs string  | `false`     | 1.20.3+       |
+| `EmitHoverShowEntityKeyAsTypeAndUuidAsId` | Use legacy field names (`"type"`, `"id"`) | `true`      | Pre-1.21.5    |
+| `ValidateStrictEvents`                    | Enable strict event validation            | `false`     | 1.20.3+       |
+| `EmitDefaultItemHoverQuantity`            | Always emit `count: 1` for items          | `false`     | 1.20.5+       |
+| `ShowItemHoverDataMode`                   | Item data format (NBT vs data components) | `LegacyNBT` | 1.20.5+       |
+| `ShadowColorMode`                         | Shadow color emission format              | `None`      | 1.21.4+       |
+
+**ShowItemHoverDataMode Values:**
+
+- `ShowItemHoverDataModeLegacyNBT` - Use legacy NBT format
+- `ShowItemHoverDataModeDataComponents` - Use modern data components
+- `ShowItemHoverDataModeEither` - Use whichever the item has
+
+**ShadowColorMode Values:**
+
+- `ShadowColorEmitModeNone` - Don't emit shadow colors
+- `ShadowColorEmitModeInteger` - Emit as packed ARGB integer
+- `ShadowColorEmitModeArray` - Emit as `[r, g, b, a]` float array
 
 ### 🆕 New Minecraft 1.21.6 Features
 

@@ -67,6 +67,53 @@ type Json struct {
 	// This setting is false by default to use the new format (1.21.5+).
 	// Set to true for compatibility with clients before 1.21.5.
 	UseLegacyHoverEventStructure bool
+	// Since Minecraft 1.21.6+ the change_page click event changed from using a string page number
+	// to using an integer page number in the "page" field.
+	// This setting decides whether to emit the page value as a string (legacy) or integer (modern).
+	//
+	// This setting is false by default to use the new format (1.21.6+).
+	// Set to true for compatibility with clients before 1.21.6.
+	EmitChangePageClickEventPageAsString bool
+	// Since Minecraft 1.20.3+ text components with no style and no children can be emitted as plain text.
+	// This setting decides whether to use this compact representation.
+	//
+	// This setting is false by default to support older client versions.
+	// Set to true for compatibility with clients 1.20.3+.
+	EmitCompactTextComponent bool
+	// Since Minecraft 1.20.3+ the hover event show entity action's entity UUID can be emitted as an int array.
+	// This setting decides whether to use the int array format (modern) or string format (legacy).
+	//
+	// This setting is false by default to support older client versions.
+	// Set to true for compatibility with clients 1.20.3+.
+	EmitHoverShowEntityIdAsIntArray bool
+	// Since Minecraft 1.21.5+ the hover event show entity action's field names changed.
+	// This setting decides whether to use the legacy field names ("type", "id") or modern ones ("id", "uuid").
+	//
+	// This setting is true by default for backward compatibility (pre-1.21.5).
+	// Set to false for modern clients 1.21.5+.
+	EmitHoverShowEntityKeyAsTypeAndUuidAsId bool
+	// Whether to be strict about accepting invalid hover/click events.
+	// When enabled, this matches Vanilla behavior as of 1.20.3+.
+	//
+	// This setting is false by default to support older client versions.
+	// Set to true for strict validation matching modern clients.
+	ValidateStrictEvents bool
+	// Since Minecraft 1.20.5+ the default hover event item stack quantity of 1 is emitted.
+	// This setting decides whether to emit the default quantity.
+	//
+	// This setting is false by default to support older client versions.
+	// Set to true for compatibility with clients 1.20.5+.
+	EmitDefaultItemHoverQuantity bool
+	// How to emit the item data on show_item hover events.
+	// This controls whether to use legacy NBT, modern data components, or either based on the item.
+	//
+	// This setting defaults to ShowItemHoverDataModeLegacyNBT for older client compatibility.
+	ShowItemHoverDataMode ShowItemHoverDataMode
+	// How to emit shadow color data.
+	// This controls the format of shadow color information in text components.
+	//
+	// This setting defaults to ShadowColorEmitModeNone for older client compatibility.
+	ShadowColorMode ShadowColorEmitMode
 	// Whether to use Go's standard json library for marshalling.
 	// It can be set to true if features such as key sorting in objects is needed
 	// (e.g. when testing to compare output).
@@ -76,7 +123,133 @@ type Json struct {
 	StdJson bool
 }
 
+// ShowItemHoverDataMode configures how to emit show_item hover events.
+type ShowItemHoverDataMode int
+
+const (
+	// ShowItemHoverDataModeLegacyNBT only emits the pre-1.20.5 item nbt.
+	ShowItemHoverDataModeLegacyNBT ShowItemHoverDataMode = iota
+	// ShowItemHoverDataModeDataComponents only emits modern data components.
+	ShowItemHoverDataModeDataComponents
+	// ShowItemHoverDataModeEither emits whichever of legacy or modern data the item has.
+	ShowItemHoverDataModeEither
+)
+
+// ShadowColorEmitMode configures how text shadow colors should be emitted.
+type ShadowColorEmitMode int
+
+const (
+	// ShadowColorEmitModeNone does not emit shadow colors.
+	ShadowColorEmitModeNone ShadowColorEmitMode = iota
+	// ShadowColorEmitModeInteger emits as a single packed integer value containing, in order, ARGB bytes.
+	ShadowColorEmitModeInteger
+	// ShadowColorEmitModeArray emits a color as 4-element float array of the RGBA components of the color.
+	ShadowColorEmitModeArray
+)
+
 var _ Codec = (*Json)(nil)
+
+// Preset JSON codec configurations for different Minecraft versions.
+// These provide out-of-the-box configurations that match Minecraft's behavior
+// across different protocol versions.
+var (
+	// JsonPre1_16 is optimized for Minecraft clients before 1.16.
+	// Features: Legacy field names, universal "value" fields, legacy hover structure,
+	// color downsampling, legacy format for all options.
+	JsonPre1_16 = &Json{
+		UseLegacyFieldNames:                     true,  // camelCase field names
+		UseLegacyClickEventStructure:            true,  // Universal "value" field
+		UseLegacyHoverEventStructure:            true,  // "contents" wrapper structure
+		NoDownsampleColor:                       false, // Downsample colors to legacy names
+		NoLegacyHover:                           false, // Include both contents and value
+		EmitChangePageClickEventPageAsString:    true,  // Page as string
+		EmitCompactTextComponent:                false, // No compact format
+		EmitHoverShowEntityIdAsIntArray:         false, // UUID as string
+		EmitHoverShowEntityKeyAsTypeAndUuidAsId: true,  // Legacy field names
+		ValidateStrictEvents:                    false, // No strict validation
+		EmitDefaultItemHoverQuantity:            false, // Don't emit count=1
+		ShowItemHoverDataMode:                   ShowItemHoverDataModeLegacyNBT,
+		ShadowColorMode:                         ShadowColorEmitModeNone,
+		StdJson:                                 true,
+	}
+
+	// JsonPre1_20_3 is optimized for Minecraft clients 1.16+ but before 1.20.3.
+	// Features: Legacy field names and structures, hex color support, modern hover events only.
+	JsonPre1_20_3 = &Json{
+		UseLegacyFieldNames:                     true,  // camelCase field names
+		UseLegacyClickEventStructure:            true,  // Universal "value" field
+		UseLegacyHoverEventStructure:            true,  // "contents" wrapper structure
+		NoDownsampleColor:                       true,  // Support hex colors
+		NoLegacyHover:                           true,  // Modern hover events only
+		EmitChangePageClickEventPageAsString:    true,  // Page as string
+		EmitCompactTextComponent:                false, // No compact format
+		EmitHoverShowEntityIdAsIntArray:         false, // UUID as string
+		EmitHoverShowEntityKeyAsTypeAndUuidAsId: true,  // Legacy field names
+		ValidateStrictEvents:                    false, // No strict validation
+		EmitDefaultItemHoverQuantity:            false, // Don't emit count=1
+		ShowItemHoverDataMode:                   ShowItemHoverDataModeLegacyNBT,
+		ShadowColorMode:                         ShadowColorEmitModeNone,
+		StdJson:                                 true,
+	}
+
+	// JsonPre1_21_5 is optimized for Minecraft clients 1.20.3+ but before 1.21.5.
+	// Features: Legacy field names and structures, compact text, int array UUIDs, strict validation.
+	JsonPre1_21_5 = &Json{
+		UseLegacyFieldNames:                     true,  // camelCase field names
+		UseLegacyClickEventStructure:            true,  // Universal "value" field
+		UseLegacyHoverEventStructure:            true,  // "contents" wrapper structure
+		NoDownsampleColor:                       true,  // Support hex colors
+		NoLegacyHover:                           false, // Include both contents and value for compatibility
+		EmitChangePageClickEventPageAsString:    true,  // Page as string
+		EmitCompactTextComponent:                true,  // Compact text format
+		EmitHoverShowEntityIdAsIntArray:         true,  // UUID as int array
+		EmitHoverShowEntityKeyAsTypeAndUuidAsId: true,  // Legacy field names
+		ValidateStrictEvents:                    true,  // Strict validation
+		EmitDefaultItemHoverQuantity:            false, // Don't emit count=1
+		ShowItemHoverDataMode:                   ShowItemHoverDataModeLegacyNBT,
+		ShadowColorMode:                         ShadowColorEmitModeNone,
+		StdJson:                                 true,
+	}
+
+	// JsonModern is optimized for Minecraft clients 1.21.5+.
+	// Features: snake_case field names, specific click fields, inlined hover structure,
+	// all modern features enabled.
+	JsonModern = &Json{
+		UseLegacyFieldNames:                     false, // snake_case field names
+		UseLegacyClickEventStructure:            false, // Specific fields (url, path, command, etc.)
+		UseLegacyHoverEventStructure:            false, // Inlined structure
+		NoDownsampleColor:                       true,  // Support hex colors
+		NoLegacyHover:                           true,  // Modern hover events only
+		EmitChangePageClickEventPageAsString:    false, // Page as integer (1.21.6+)
+		EmitCompactTextComponent:                true,  // Compact text format
+		EmitHoverShowEntityIdAsIntArray:         true,  // UUID as int array
+		EmitHoverShowEntityKeyAsTypeAndUuidAsId: false, // Modern field names
+		ValidateStrictEvents:                    true,  // Strict validation
+		EmitDefaultItemHoverQuantity:            true,  // Emit count=1
+		ShowItemHoverDataMode:                   ShowItemHoverDataModeDataComponents,
+		ShadowColorMode:                         ShadowColorEmitModeInteger,
+		StdJson:                                 true,
+	}
+
+	// JsonUniversal provides maximum compatibility - can decode any format
+	// but encodes in modern format. Recommended for most use cases.
+	JsonUniversal = &Json{
+		UseLegacyFieldNames:                     false, // Encode in modern format
+		UseLegacyClickEventStructure:            false, // Encode in modern format
+		UseLegacyHoverEventStructure:            false, // Encode in modern format
+		NoDownsampleColor:                       true,  // Support hex colors
+		NoLegacyHover:                           true,  // Modern hover events
+		EmitChangePageClickEventPageAsString:    false, // Modern page format
+		EmitCompactTextComponent:                true,  // Modern compact format
+		EmitHoverShowEntityIdAsIntArray:         true,  // Modern UUID format
+		EmitHoverShowEntityKeyAsTypeAndUuidAsId: false, // Modern field names
+		ValidateStrictEvents:                    true,  // Modern validation
+		EmitDefaultItemHoverQuantity:            true,  // Modern quantity emission
+		ShowItemHoverDataMode:                   ShowItemHoverDataModeDataComponents,
+		ShadowColorMode:                         ShadowColorEmitModeInteger,
+		StdJson:                                 true,
+	}
+)
 
 // Marshal writes the json encoded Component to the Writer.
 func (j *Json) Marshal(wr io.Writer, c Component) (err error) {
@@ -274,13 +447,18 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 			case "run_command", "suggest_command":
 				clickEventObj[clickEventCommand] = s.ClickEvent.Value()
 			case "change_page":
-				// Convert page number to int for new format
 				if pageStr := s.ClickEvent.Value(); pageStr != "" {
-					if pageInt, err := strconv.Atoi(pageStr); err == nil {
-						clickEventObj[clickEventPage] = pageInt
-					} else {
-						// Fallback to string if conversion fails
+					if j.EmitChangePageClickEventPageAsString {
+						// Legacy format: emit page as string
 						clickEventObj[clickEventPage] = pageStr
+					} else {
+						// Modern format: emit page as integer
+						if pageInt, err := strconv.Atoi(pageStr); err == nil {
+							clickEventObj[clickEventPage] = pageInt
+						} else {
+							// Fallback to string if conversion fails
+							clickEventObj[clickEventPage] = pageStr
+						}
 					}
 				}
 			case "copy_to_clipboard":
@@ -356,9 +534,14 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 			if j.UseLegacyHoverEventStructure {
 				// Legacy structure: use "contents" field
 				itemObj := obj{
-					itemId:    t.Item.String(),
-					itemCount: t.Count,
-					itemTag:   t.NBT.String(),
+					itemId: t.Item.String(),
+				}
+				// Only emit count if it's not 1 OR if EmitDefaultItemHoverQuantity is true
+				if t.Count != 1 || j.EmitDefaultItemHoverQuantity {
+					itemObj[itemCount] = t.Count
+				}
+				if t.NBT != nil {
+					itemObj[itemTag] = t.NBT.String()
 				}
 				o[hoverEventContents] = itemObj
 				if !j.NoLegacyHover {
@@ -367,7 +550,10 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 			} else {
 				// New structure: inline the item data directly
 				o[itemId] = t.Item.String()
-				o[itemCount] = t.Count
+				// Only emit count if it's not 1 OR if EmitDefaultItemHoverQuantity is true
+				if t.Count != 1 || j.EmitDefaultItemHoverQuantity {
+					o[itemCount] = t.Count
+				}
 				if t.NBT != nil {
 					o[itemTag] = t.NBT.String()
 				}
@@ -383,20 +569,33 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 			}
 
 			if j.UseLegacyHoverEventStructure {
-				// Legacy structure: use "contents" field with old field names
-				entityObj := obj{
-					entityTypeLegacy: t.Type.String(),
-					entityIdLegacy:   t.Id.String(),
-					entityName:       nameObj,
+				// Legacy structure: use "contents" field
+				entityObj := obj{}
+				if j.EmitHoverShowEntityKeyAsTypeAndUuidAsId {
+					// Use legacy field names: "type" and "id"
+					entityObj[entityTypeLegacy] = t.Type.String()
+					entityObj[entityIdLegacy] = t.Id.String()
+				} else {
+					// Use modern field names: "id" and "uuid"
+					entityObj[entityType] = t.Type.String()
+					entityObj[entityUuid] = t.Id.String()
 				}
+				entityObj[entityName] = nameObj
 				o[hoverEventContents] = entityObj
 				if !j.NoLegacyHover {
 					o[hoverEventValue] = entityObj
 				}
 			} else {
-				// New structure: inline the entity data with new field names
-				o[entityType] = t.Type.String()
-				o[entityUuid] = t.Id.String()
+				// New structure: inline the entity data
+				if j.EmitHoverShowEntityKeyAsTypeAndUuidAsId {
+					// Use legacy field names: "type" and "id"
+					o[entityTypeLegacy] = t.Type.String()
+					o[entityIdLegacy] = t.Id.String()
+				} else {
+					// Use modern field names: "id" and "uuid"
+					o[entityType] = t.Type.String()
+					o[entityUuid] = t.Id.String()
+				}
 				o[entityName] = nameObj
 			}
 		}
