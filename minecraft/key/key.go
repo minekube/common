@@ -60,6 +60,14 @@ func ValueValid(value string) bool {
 	return true
 }
 
+// If the namespace is MinecraftNamespace, only the value is returned.
+func Minimal(k Key) string {
+	if k.Namespace() == MinecraftNamespace {
+		return k.Value()
+	}
+	return k.String()
+}
+
 func namespaceCharValid(char rune) bool {
 	switch char {
 	case '_', '-', '.':
