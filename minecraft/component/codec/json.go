@@ -302,6 +302,8 @@ func (j *Json) encode(o obj, c Component) (err error) {
 		return j.encodeText(o, t)
 	case *Translation:
 		return j.encodeTranslation(o, t)
+	case *Keybind:
+		return j.encodeKeybind(o, t)
 	default:
 		return fmt.Errorf("codec.Json marshal: unsupported component type %T", c)
 	}
@@ -314,6 +316,8 @@ const (
 
 	translate     = "translate"
 	translateWith = "with"
+
+	keybind = "keybind"
 
 	font      = "font"
 	color     = "color"
@@ -381,6 +385,14 @@ func (j *Json) encodeTranslation(o obj, t *Translation) error {
 	}
 	o[translate] = t.Key
 	return j.encodeComponent(o, t, translateWith)
+}
+
+func (j *Json) encodeKeybind(o obj, t *Keybind) error {
+	if t == nil {
+		return nil
+	}
+	o[keybind] = t.Key
+	return j.encodeComponent(o, t, extra)
 }
 
 func (j *Json) encodeComponent(o obj, c Component, childrenKey string) (err error) {
@@ -680,6 +692,8 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 		} else {
 			c = &Translation{Key: k}
 		}
+	} else if o.Has(keybind) {
+		c = &Keybind{Key: fmt.Sprint(o[keybind])}
 	} else {
 		c = &Text{}
 	}

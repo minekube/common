@@ -123,6 +123,30 @@ func TestJson_translation(t *testing.T) {
 	require.Equal(t, tr, tr2)
 }
 
+func TestJson_keybind(t *testing.T) {
+	kb := &Text{
+		Content: "Press ",
+		Extra: []Component{
+			&Keybind{
+				Key: "key.jump",
+				S: Style{
+					Color: Red.RGB,
+				},
+			},
+			&Text{Content: " to jump"},
+		},
+	}
+
+	s := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(s, kb))
+	const exp = `{"extra":[{"color":"#ff5555","keybind":"key.jump"},{"text":" to jump"}],"text":"Press "}`
+	require.Equal(t, exp, s.String())
+
+	kb2, err := j1215Plus.Unmarshal([]byte(exp))
+	require.NoError(t, err)
+	require.Equal(t, kb, kb2)
+}
+
 // Test encoding with new format (1.21.5+)
 func TestJson_Marshal_NewFormat(t *testing.T) {
 	b := new(strings.Builder)
