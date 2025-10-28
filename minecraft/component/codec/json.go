@@ -312,8 +312,9 @@ const (
 	text  = "text"
 	extra = "extra"
 
-	translate     = "translate"
-	translateWith = "with"
+	translate         = "translate"
+	translateFallback = "fallback"
+	translateWith     = "with"
 
 	font      = "font"
 	color     = "color"
@@ -375,11 +376,15 @@ func (j *Json) encodeText(o obj, t *Text) error {
 	o[text] = t.Content
 	return j.encodeComponent(o, t, extra)
 }
+
 func (j *Json) encodeTranslation(o obj, t *Translation) error {
 	if t == nil {
 		return nil
 	}
 	o[translate] = t.Key
+	if t.Fallback != nil {
+		o[translateFallback] = t.Fallback
+	}
 	return j.encodeComponent(o, t, translateWith)
 }
 
@@ -660,6 +665,11 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 		c = &Text{Content: fmt.Sprint(o[text])}
 	} else if o.Has(translate) {
 		k := fmt.Sprint(o[translate])
+		var fallback *string
+		if o.Has(translateFallback) {
+			fb := fmt.Sprint(o[translateFallback])
+			fallback = &fb
+		}
 		if o.Has(translateWith) {
 			with, ok := o[translateWith].([]interface{})
 			if !ok {
@@ -674,11 +684,12 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 				args = append(args, a)
 			}
 			c = &Translation{
-				Key:  k,
-				With: args,
+				Key:      k,
+				With:     args,
+				Fallback: fallback,
 			}
 		} else {
-			c = &Translation{Key: k}
+			c = &Translation{Key: k, Fallback: fallback}
 		}
 	} else {
 		c = &Text{}

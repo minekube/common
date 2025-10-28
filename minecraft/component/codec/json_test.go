@@ -100,9 +100,11 @@ func TestJson_Unmarshal_text(t *testing.T) {
 }
 
 func TestJson_translation(t *testing.T) {
+	fallback := "Sample Fallback"
 	tr := &Translation{
-		Key: "sample.key",
-		S:   Style{Color: Red.RGB},
+		Key:      "sample.key",
+		Fallback: &fallback,
+		S:        Style{Color: Red.RGB},
 		With: []Component{
 			&Text{
 				Content: "Hello",
@@ -115,7 +117,7 @@ func TestJson_translation(t *testing.T) {
 	}
 	s := new(strings.Builder)
 	require.NoError(t, j1215Plus.Marshal(s, tr))
-	const exp = `{"color":"#ff5555","translate":"sample.key","with":[{"text":"Hello"},{"translate":"another.key"}]}`
+	const exp = `{"color":"#ff5555","fallback":"Sample Fallback","translate":"sample.key","with":[{"text":"Hello"},{"translate":"another.key"}]}`
 	require.Equal(t, exp, s.String())
 
 	tr2, err := j1215Plus.Unmarshal([]byte(exp))

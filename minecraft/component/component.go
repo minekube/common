@@ -19,9 +19,10 @@ type Text struct {
 }
 
 type Translation struct {
-	Key  string // Translation key
-	S    Style
-	With []Component
+	Key      string // Translation key
+	S        Style
+	Fallback *string // Fallback text if translation is missing
+	With     []Component
 }
 
 func (t *Text) Children() []Component {
@@ -52,6 +53,6 @@ var (
 )
 
 func (t *Text) MarshalJSON() ([]byte, error)        { panic("use codec.Json instead") }
-func (t *Text) UnmarshalJSON(b []byte) error        { panic("use codec.Json instead") }
-func (t *Translation) UnmarshalJSON(b []byte) error { panic("use codec.Json instead") }
+func (t *Text) UnmarshalJSON(_ []byte) error        { panic("use codec.Json instead") }
+func (t *Translation) UnmarshalJSON(_ []byte) error { panic("use codec.Json instead") }
 func (t *Translation) MarshalJSON() ([]byte, error) { panic("use codec.Json instead") }
