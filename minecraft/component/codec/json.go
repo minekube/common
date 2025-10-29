@@ -392,6 +392,14 @@ func (j *Json) encodeComponent(o obj, c Component, childrenKey string) (err erro
 	}
 	var children arr
 	for _, child := range c.Children() {
+		// Check for eligibility for compact text emission
+		if j.EmitCompactTextComponent && len(child.Children()) == 0 && (child.Style() == nil || child.Style().IsZero()) {
+			if txt, ok := child.(*Text); ok {
+				children = append(children, txt.Content)
+				continue
+			}
+		}
+
 		childObj := obj{}
 		if err = j.encode(childObj, child); err != nil {
 			return err

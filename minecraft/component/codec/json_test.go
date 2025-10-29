@@ -745,4 +745,49 @@ func TestJSONOptions(t *testing.T) {
 			require.NotContains(t, encoded.String(), `"page":"3"`)
 		})
 	})
+
+	// TEST EMIT_COMPACT_TEXT_COMPONENT option
+	t.Run("emit_compact_text_component", func(t *testing.T) {
+		component := &Text{
+			Extra: []Component{
+				&Text{
+					Content: "Hello",
+					S: Style{
+						Bold: True,
+					},
+				},
+				&Text{Content: " World"},
+			},
+		}
+		expectedCompactTrue := `{"extra":[{"bold":true,"text":"Hello"}," World"],"text":""}`
+		expectedCompactFalse := `{"extra":[{"bold":true,"text":"Hello"},{"text":" World"}],"text":""}`
+
+		testFn := func(t *testing.T, expectedJson string, emitCompact bool) {
+			codec := &Json{
+				NoDownsampleColor:        true,
+				UseLegacyFieldNames:      false,
+				EmitCompactTextComponent: emitCompact,
+				StdJson:                  true,
+			}
+
+			encoded := new(strings.Builder)
+			err := codec.Marshal(encoded, component)
+			require.NoError(t, err)
+			require.JSONEq(t, expectedJson, encoded.String())
+
+			decoded, err := codec.Unmarshal([]byte(expectedJson))
+			require.NoError(t, err)
+			require.Equal(t, component, decoded)
+		}
+
+		// Test with EmitCompactTextComponent = false
+		t.Run("emit_false", func(t *testing.T) {
+			testFn(t, expectedCompactFalse, false)
+		})
+
+		// Test with EmitCompactTextComponent = true
+		t.Run("emit_true", func(t *testing.T) {
+			testFn(t, expectedCompactTrue, true)
+		})
+	})
 }
