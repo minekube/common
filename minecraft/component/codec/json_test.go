@@ -99,6 +99,14 @@ func TestJson_Unmarshal_text(t *testing.T) {
 	require.Equal(t, txt, c)
 }
 
+func TestJson_Unmarshal_text_NBTStyleBooleanStrings(t *testing.T) {
+	input := `{"text":"Hello","obfuscated":"1B","italic":"0B","underlined":"true"}`
+
+	c, err := j1215Plus.Unmarshal([]byte(input))
+	require.NoError(t, err)
+	require.Equal(t, &Text{Content: "Hello", S: Style{Obfuscated: True, Italic: False, Underlined: True}}, c)
+}
+
 func TestJson_translation(t *testing.T) {
 	tr := &Translation{
 		Key: "sample.key",
@@ -121,6 +129,53 @@ func TestJson_translation(t *testing.T) {
 	tr2, err := j1215Plus.Unmarshal([]byte(exp))
 	require.NoError(t, err)
 	require.Equal(t, tr, tr2)
+}
+
+func TestJson_score(t *testing.T) {
+	sc := &Score{
+		Name:      "PlayerOne",
+		Objective: "kills",
+		Value:     "42",
+		S:         Style{Color: Green.RGB},
+		Extra: []Component{
+			&Text{Content: " points"},
+		},
+	}
+
+	b := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(b, sc))
+	require.JSONEq(t,
+		`{"color":"#55ff55","score":{"name":"PlayerOne","objective":"kills","value":"42"},"extra":[{"text":" points"}]}`,
+		b.String(),
+	)
+
+	decoded, err := j1215Plus.Unmarshal([]byte(b.String()))
+	require.NoError(t, err)
+	require.Equal(t, sc, decoded)
+}
+
+func TestJson_score_WithoutOptionalValue(t *testing.T) {
+	input := `{"score":{"name":"PlayerOne","objective":"kills"}}`
+	decoded, err := j1215Plus.Unmarshal([]byte(input))
+	require.NoError(t, err)
+	require.Equal(t, &Score{Name: "PlayerOne", Objective: "kills"}, decoded)
+}
+
+func TestJson_score_NullOptionalValue(t *testing.T) {
+	input := `{"score":{"name":"hard","objective":"true","value":null}}`
+	decoded, err := j1215Plus.Unmarshal([]byte(input))
+	require.NoError(t, err)
+	require.Equal(t, &Score{Name: "hard", Objective: "true"}, decoded)
+}
+
+func TestJson_NullRootText_ScoreAndReason_AppendedTextVisible(t *testing.T) {
+	input := `{"text":null,"extra":[{"score":{"name":"hard","objective":"true","value":null}},{"text":"hello world"}]}`
+	decoded, err := j1215Plus.Unmarshal([]byte(input))
+	require.NoError(t, err)
+
+	b := new(strings.Builder)
+	require.NoError(t, Plain{}.Marshal(b, decoded))
+	require.Equal(t, "hello world", b.String())
 }
 
 // Test encoding with new format (1.21.5+)

@@ -302,6 +302,8 @@ func (j *Json) encode(o obj, c Component) (err error) {
 		return j.encodeText(o, t)
 	case *Translation:
 		return j.encodeTranslation(o, t)
+	case *Score:
+		return j.encodeScore(o, t)
 	default:
 		return fmt.Errorf("codec.Json marshal: unsupported component type %T", c)
 	}
@@ -314,6 +316,11 @@ const (
 
 	translate     = "translate"
 	translateWith = "with"
+
+	score          = "score"
+	scoreName      = "name"
+	scoreObjective = "objective"
+	scoreValue     = "value"
 
 	font      = "font"
 	color     = "color"
@@ -381,6 +388,21 @@ func (j *Json) encodeTranslation(o obj, t *Translation) error {
 	}
 	o[translate] = t.Key
 	return j.encodeComponent(o, t, translateWith)
+}
+
+func (j *Json) encodeScore(o obj, s *Score) error {
+	if s == nil {
+		return nil
+	}
+	scoreObj := obj{
+		scoreName:      s.Name,
+		scoreObjective: s.Objective,
+	}
+	if s.Value != "" {
+		scoreObj[scoreValue] = s.Value
+	}
+	o[score] = scoreObj
+	return j.encodeComponent(o, s, extra)
 }
 
 func (j *Json) encodeComponent(o obj, c Component, childrenKey string) (err error) {
@@ -657,9 +679,16 @@ func (j *Json) decodeFromInterfaceSlice(i []interface{}) (Component, error) {
 
 func (j *Json) decodeComponent(o obj) (c Component, err error) {
 	if o.Has(text) {
-		c = &Text{Content: fmt.Sprint(o[text])}
+		t := &Text{}
+		if o[text] != nil {
+			t.Content = fmt.Sprint(o[text])
+		}
+		c = t
 	} else if o.Has(translate) {
-		k := fmt.Sprint(o[translate])
+		k := ""
+		if o[translate] != nil {
+			k = fmt.Sprint(o[translate])
+		}
 		if o.Has(translateWith) {
 			with, ok := o[translateWith].([]interface{})
 			if !ok {
@@ -680,6 +709,22 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 		} else {
 			c = &Translation{Key: k}
 		}
+	} else if o.Has(score) {
+		scoreObj, ok := o[score].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, score, o[score])
+		}
+		s := &Score{}
+		if v, ok := scoreObj[scoreName]; ok && v != nil {
+			s.Name = fmt.Sprint(v)
+		}
+		if v, ok := scoreObj[scoreObjective]; ok && v != nil {
+			s.Objective = fmt.Sprint(v)
+		}
+		if v, ok := scoreObj[scoreValue]; ok && v != nil {
+			s.Value = fmt.Sprint(v)
+		}
+		c = s
 	} else {
 		c = &Text{}
 	}
@@ -731,17 +776,9 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 	}
 	for dec := range Decorations {
 		if o.Has(string(dec)) {
-			var b bool
-			switch v := o[string(dec)].(type) {
-			case string:
-				b, err = strconv.ParseBool(v)
-				if err != nil {
-					return nil, fmt.Errorf(`value of key %q is not a bool, but %T: %s`, dec, o[string(dec)], v)
-				}
-			case bool:
-				b = v
-			default:
-				return nil, fmt.Errorf(`value of key %q is not a bool, but %T`, dec, o[string(dec)])
+			b, ok := decodeBoolLike(o[string(dec)])
+			if !ok {
+				return nil, fmt.Errorf(`value of key %q is not a bool, but %T: %v`, dec, o[string(dec)], o[string(dec)])
 			}
 			s.SetDecoration(dec, StateByBool(b))
 		}
@@ -799,6 +836,52 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 		}
 	}
 	return s, nil
+}
+
+func decodeBoolLike(v interface{}) (bool, bool) {
+	switch b := v.(type) {
+	case bool:
+		return b, true
+	case string:
+		s := strings.TrimSpace(b)
+		if p, err := strconv.ParseBool(s); err == nil {
+			return p, true
+		}
+		s = strings.TrimSuffix(strings.TrimSuffix(s, "b"), "B")
+		switch s {
+		case "1":
+			return true, true
+		case "0":
+			return false, true
+		}
+		return false, false
+	case int:
+		return b == 1, b == 0 || b == 1
+	case int8:
+		return b == 1, b == 0 || b == 1
+	case int16:
+		return b == 1, b == 0 || b == 1
+	case int32:
+		return b == 1, b == 0 || b == 1
+	case int64:
+		return b == 1, b == 0 || b == 1
+	case uint:
+		return b == 1, b == 0 || b == 1
+	case uint8:
+		return b == 1, b == 0 || b == 1
+	case uint16:
+		return b == 1, b == 0 || b == 1
+	case uint32:
+		return b == 1, b == 0 || b == 1
+	case uint64:
+		return b == 1, b == 0 || b == 1
+	case float32:
+		return b == 1, b == 0 || b == 1
+	case float64:
+		return b == 1, b == 0 || b == 1
+	default:
+		return false, false
+	}
 }
 
 // may return nil,nil in case object has missing/invalid keys to decode a HoverEvent or Readable() == false
