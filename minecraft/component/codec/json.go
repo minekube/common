@@ -1613,6 +1613,9 @@ func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 		return nil, err
 	}
 	if value == nil {
+		if j.ValidateStrictEvents {
+			return nil, fmt.Errorf("missing value for hover event action %q", action)
+		}
 		return nil, nil
 	}
 
@@ -1819,6 +1822,9 @@ func (j *Json) decodeClickEvent(o obj) (ClickEvent, error) {
 	}
 
 	if value == "" {
+		if j.ValidateStrictEvents {
+			return nil, fmt.Errorf("missing value for click event action %q", action)
+		}
 		return nil, nil
 	}
 

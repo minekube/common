@@ -375,6 +375,12 @@ func TestJson_ValidateStrictEvents(t *testing.T) {
 
 	_, err = strict.Unmarshal([]byte(`{"text":"bad","hover_event":{"action":"not_real","value":{"text":"x"}}}`))
 	require.ErrorContains(t, err, "unsupported hover event action")
+
+	_, err = strict.Unmarshal([]byte(`{"text":"bad","click_event":{"action":"run_command"}}`))
+	require.ErrorContains(t, err, "missing value for click event action")
+
+	_, err = strict.Unmarshal([]byte(`{"text":"bad","hover_event":{"action":"show_item"}}`))
+	require.ErrorContains(t, err, "missing value for hover event action")
 }
 
 func TestJson_ShowTextHoverAnyComponent(t *testing.T) {
