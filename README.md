@@ -68,7 +68,7 @@ err := j.Marshal(&buf, component)
 | Selector | `selector`, `separator` | Supports component separator |
 | Keybind | `keybind` | Client-local keybind rendering |
 | NBT | `nbt`, `block`/`entity`/`storage`, `interpret`, `plain`, `separator` | Supports 26.1 `plain` |
-| Object | `object`, `atlas`/`sprite`, `player`, `hat`, `fallback` | Supports 1.21.9+ sprites/player heads and 26.1 fallback |
+| Object | `atlas`/`sprite`, `player`, `hat`, `fallback` | Supports 1.21.9+ sprites/player heads and 26.1 fallback |
 
 ### 🎛️ Version Configuration Examples
 
@@ -144,7 +144,7 @@ j := &codec.Json{
     EmitDefaultItemHoverQuantity:             true,  // Always emit count=1 (1.20.5+)
 
     // Advanced formatting modes
-    ShowItemHoverDataMode: codec.ShowItemHoverDataModeDataComponents, // Legacy NBT vs modern data components
+    ShowItemHoverDataMode: codec.ShowItemHoverDataModeEither, // Legacy NBT vs modern data components
     ShadowColorMode:       codec.ShadowColorEmitModeInteger,          // Shadow color format (1.21.4+)
 
     StdJson: true,
@@ -220,7 +220,6 @@ nbtComponent := &component.EntityNBT{
 
 ```json
 {
-  "object": "atlas",
   "atlas": "minecraft:blocks",
   "sprite": "minecraft:item/diamond"
 }
@@ -234,7 +233,6 @@ nbtComponent := &component.EntityNBT{
     "text": "jeb_"
   },
   "hat": true,
-  "object": "player",
   "player": "jeb_"
 }
 ```

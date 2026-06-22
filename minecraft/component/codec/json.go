@@ -226,7 +226,7 @@ var (
 		EmitHoverShowEntityKeyAsTypeAndUuidAsId: false, // Modern field names
 		ValidateStrictEvents:                    true,  // Strict validation
 		EmitDefaultItemHoverQuantity:            true,  // Emit count=1
-		ShowItemHoverDataMode:                   ShowItemHoverDataModeDataComponents,
+		ShowItemHoverDataMode:                   ShowItemHoverDataModeEither,
 		ShadowColorMode:                         ShadowColorEmitModeInteger,
 		StdJson:                                 true,
 	}
@@ -245,7 +245,7 @@ var (
 		EmitHoverShowEntityKeyAsTypeAndUuidAsId: false, // Modern field names
 		ValidateStrictEvents:                    true,  // Modern validation
 		EmitDefaultItemHoverQuantity:            true,  // Modern quantity emission
-		ShowItemHoverDataMode:                   ShowItemHoverDataModeDataComponents,
+		ShowItemHoverDataMode:                   ShowItemHoverDataModeEither,
 		ShadowColorMode:                         ShadowColorEmitModeInteger,
 		StdJson:                                 true,
 	}
@@ -526,7 +526,6 @@ func (j *Json) encodeObject(o obj, c *Object) error {
 	}
 	switch contents := c.Contents.(type) {
 	case *SpriteObjectContents:
-		o[object] = objectAtlas
 		if contents.Atlas != nil {
 			o[objectAtlas] = contents.Atlas.String()
 		}
@@ -534,7 +533,6 @@ func (j *Json) encodeObject(o obj, c *Object) error {
 			o[objectSprite] = contents.Sprite.String()
 		}
 	case *PlayerHeadObjectContents:
-		o[object] = objectPlayer
 		o[objectHat] = contents.Hat
 		o[objectPlayer] = j.encodePlayerProfile(contents.Profile)
 	default:
@@ -721,7 +719,7 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 	switch event.Action().Name() {
 	case "show_text":
 		switch t := event.Value().(type) {
-		case *Text:
+		case Component:
 			if j.UseLegacyHoverEventStructure {
 				// Legacy structure: use "contents" field
 				textObj := obj{}
@@ -755,9 +753,11 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 					itemObj[itemCount] = t.Count
 				}
 				if t.NBT != nil {
-					itemObj[itemTag] = t.NBT.String()
+					if j.shouldEmitShowItemNBT(t) {
+						itemObj[itemTag] = t.NBT.String()
+					}
 				}
-				if len(t.Components) != 0 {
+				if j.shouldEmitShowItemComponents(t) {
 					itemObj[itemComponents] = obj(t.Components)
 				}
 				o[hoverEventContents] = itemObj
@@ -772,9 +772,11 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 					o[itemCount] = t.Count
 				}
 				if t.NBT != nil {
-					o[itemTag] = t.NBT.String()
+					if j.shouldEmitShowItemNBT(t) {
+						o[itemTag] = t.NBT.String()
+					}
 				}
-				if len(t.Components) != 0 {
+				if j.shouldEmitShowItemComponents(t) {
 					o[itemComponents] = obj(t.Components)
 				}
 			}
@@ -822,6 +824,32 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 	}
 
 	return nil
+}
+
+func (j *Json) shouldEmitShowItemNBT(item *ShowItemHoverType) bool {
+	if item == nil || item.NBT == nil {
+		return false
+	}
+	switch j.ShowItemHoverDataMode {
+	case ShowItemHoverDataModeDataComponents:
+		return false
+	case ShowItemHoverDataModeEither:
+		return len(item.Components) == 0
+	default:
+		return true
+	}
+}
+
+func (j *Json) shouldEmitShowItemComponents(item *ShowItemHoverType) bool {
+	if item == nil || len(item.Components) == 0 {
+		return false
+	}
+	switch j.ShowItemHoverDataMode {
+	case ShowItemHoverDataModeLegacyNBT:
+		return false
+	default:
+		return true
+	}
 }
 
 func (j *Json) encodeColor(c col.Color) (s string) {
@@ -1143,11 +1171,20 @@ func (j *Json) decodeProfileProperties(v interface{}) ([]ProfileProperty, error)
 	case map[string]interface{}:
 		properties := make([]ProfileProperty, 0, len(t))
 		for name, value := range t {
-			propertyValue, ok := value.(string)
-			if !ok {
-				return nil, fmt.Errorf(`player profile property %q is not a string, but %T`, name, value)
+			switch values := value.(type) {
+			case []interface{}:
+				for _, entry := range values {
+					propertyValue, ok := entry.(string)
+					if !ok {
+						return nil, fmt.Errorf(`player profile property %q entry is not a string, but %T`, name, entry)
+					}
+					properties = append(properties, ProfileProperty{Name: name, Value: propertyValue})
+				}
+			case string:
+				properties = append(properties, ProfileProperty{Name: name, Value: values})
+			default:
+				return nil, fmt.Errorf(`player profile property %q is not a string or string array, but %T`, name, value)
 			}
-			properties = append(properties, ProfileProperty{Name: name, Value: propertyValue})
 		}
 		return properties, nil
 	default:

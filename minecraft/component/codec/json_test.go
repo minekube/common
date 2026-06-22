@@ -207,6 +207,63 @@ func TestJson_ShowItemModernComponents(t *testing.T) {
 	require.Equal(t, component, decoded)
 }
 
+func TestJson_ShowItemHoverDataMode(t *testing.T) {
+	diamond, _ := key.Parse("minecraft:diamond")
+	component := &Text{
+		Content: "Hover",
+		S: Style{HoverEvent: ShowItem(&ShowItemHoverType{
+			Item:  diamond,
+			Count: 1,
+			NBT:   nbt.NewBinaryTagHolder("{display:{Name:\"Legacy\"}}"),
+			Components: map[string]interface{}{
+				"minecraft:custom_name": map[string]interface{}{"text": "Modern"},
+			},
+		})},
+	}
+
+	t.Run("legacy_nbt", func(t *testing.T) {
+		encoded := new(strings.Builder)
+		require.NoError(t, (&Json{
+			UseLegacyFieldNames:          true,
+			UseLegacyHoverEventStructure: true,
+			ShowItemHoverDataMode:        ShowItemHoverDataModeLegacyNBT,
+			StdJson:                      true,
+		}).Marshal(encoded, component))
+		require.Contains(t, encoded.String(), `"tag":"{display:{Name:\"Legacy\"}}"`)
+		require.NotContains(t, encoded.String(), `"components"`)
+	})
+
+	t.Run("data_components", func(t *testing.T) {
+		encoded := new(strings.Builder)
+		require.NoError(t, (&Json{
+			UseLegacyFieldNames:          false,
+			UseLegacyHoverEventStructure: false,
+			EmitDefaultItemHoverQuantity: true,
+			ShowItemHoverDataMode:        ShowItemHoverDataModeDataComponents,
+			StdJson:                      true,
+		}).Marshal(encoded, component))
+		require.Contains(t, encoded.String(), `"components":{"minecraft:custom_name":{"text":"Modern"}}`)
+		require.NotContains(t, encoded.String(), `"tag"`)
+	})
+}
+
+func TestJson_ShowTextHoverAnyComponent(t *testing.T) {
+	component := &Text{
+		Content: "Hover",
+		S: Style{
+			HoverEvent: ShowText(&Translation{Key: "item.minecraft.diamond", Fallback: "Diamond"}),
+		},
+	}
+
+	encoded := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(encoded, component))
+	require.Equal(t, `{"hover_event":{"action":"show_text","value":{"fallback":"Diamond","translate":"item.minecraft.diamond"}},"text":"Hover"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
 func TestJson_ObjectComponent_AtlasSprite(t *testing.T) {
 	blocks, _ := key.Parse("minecraft:blocks")
 	diamond, _ := key.Parse("minecraft:item/diamond")
@@ -215,7 +272,7 @@ func TestJson_ObjectComponent_AtlasSprite(t *testing.T) {
 	encoded := new(strings.Builder)
 	err := j1215Plus.Marshal(encoded, component)
 	require.NoError(t, err)
-	require.Equal(t, `{"atlas":"minecraft:blocks","object":"atlas","sprite":"minecraft:item/diamond"}`, encoded.String())
+	require.Equal(t, `{"atlas":"minecraft:blocks","sprite":"minecraft:item/diamond"}`, encoded.String())
 
 	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
 	require.NoError(t, err)
@@ -243,7 +300,7 @@ func TestJson_ObjectComponent_PlayerHeadWithFallback(t *testing.T) {
 	encoded := new(strings.Builder)
 	err := j1215Plus.Marshal(encoded, component)
 	require.NoError(t, err)
-	require.Equal(t, `{"fallback":{"text":"jeb_"},"hat":false,"object":"player","player":{"id":"12345678-1234-1234-1234-123456789abc","name":"jeb_"}}`, encoded.String())
+	require.Equal(t, `{"fallback":{"text":"jeb_"},"hat":false,"player":{"id":"12345678-1234-1234-1234-123456789abc","name":"jeb_"}}`, encoded.String())
 
 	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
 	require.NoError(t, err)
@@ -256,11 +313,24 @@ func TestJson_ObjectComponent_PlayerNameShortcut(t *testing.T) {
 	encoded := new(strings.Builder)
 	err := j1215Plus.Marshal(encoded, component)
 	require.NoError(t, err)
-	require.Equal(t, `{"hat":true,"object":"player","player":"jeb_"}`, encoded.String())
+	require.Equal(t, `{"hat":true,"player":"jeb_"}`, encoded.String())
 
 	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
 	require.NoError(t, err)
 	require.Equal(t, component, decoded)
+}
+
+func TestJson_ObjectComponent_PlayerPropertiesMap(t *testing.T) {
+	decoded, err := j1215Plus.Unmarshal([]byte(`{"player":{"name":"jeb_","properties":{"textures":["value-a","value-b"]}}}`))
+	require.NoError(t, err)
+
+	require.Equal(t, PlayerHead(&PlayerProfile{
+		Name: "jeb_",
+		Properties: []ProfileProperty{
+			{Name: "textures", Value: "value-a"},
+			{Name: "textures", Value: "value-b"},
+		},
+	}, true), decoded)
 }
 
 // Test encoding with new format (1.21.5+)
