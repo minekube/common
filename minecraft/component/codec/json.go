@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -253,6 +254,16 @@ var (
 
 // Marshal writes the json encoded Component to the Writer.
 func (j *Json) Marshal(wr io.Writer, c Component) (err error) {
+	if s, ok := j.compactTextContent(c); ok {
+		var data []byte
+		data, err = json.Marshal(s)
+		if err != nil {
+			return err
+		}
+		_, err = wr.Write(data)
+		return err
+	}
+
 	o := obj{}
 	if err = j.encode(o, c); err != nil {
 		return err
@@ -584,6 +595,11 @@ func (j *Json) encodeComponent(o obj, c Component, childrenKey string) (err erro
 	}
 	var children arr
 	for _, child := range c.Children() {
+		if childText, ok := j.compactTextContent(child); ok {
+			children = append(children, childText)
+			continue
+		}
+
 		childObj := obj{}
 		if err = j.encode(childObj, child); err != nil {
 			return err
@@ -594,6 +610,20 @@ func (j *Json) encodeComponent(o obj, c Component, childrenKey string) (err erro
 		o[childrenKey] = children
 	}
 	return nil
+}
+
+func (j *Json) compactTextContent(c Component) (string, bool) {
+	if !j.EmitCompactTextComponent {
+		return "", false
+	}
+	t, ok := c.(*Text)
+	if !ok || len(t.Extra) != 0 {
+		return "", false
+	}
+	if !t.S.IsZero() {
+		return "", false
+	}
+	return t.Content, true
 }
 
 func (j *Json) encodeStyle(o obj, s *Style) error {
@@ -619,6 +649,10 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 		o[insertion] = *s.Insertion
 	}
 	if s.ClickEvent != nil {
+		if err := j.validateClickEvent(s.ClickEvent.Action()); err != nil {
+			return err
+		}
+
 		clickEventKey := clickEvent
 		if j.UseLegacyFieldNames {
 			clickEventKey = clickEventLegacy
@@ -681,6 +715,10 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 		o[clickEventKey] = clickEventObj
 	}
 	if s.HoverEvent != nil {
+		if err := j.validateHoverEvent(s.HoverEvent.Action()); err != nil {
+			return err
+		}
+
 		eventObj := obj{}
 		if err := j.encodeHoverEvent(eventObj, s.HoverEvent); err != nil {
 			return err
@@ -692,6 +730,28 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 			}
 			o[hoverEventKey] = eventObj
 		}
+	}
+	return nil
+}
+
+func (j *Json) validateClickEvent(action ClickAction) error {
+	if !j.ValidateStrictEvents {
+		return nil
+	}
+	known, ok := ClickActions[action.Name()]
+	if !ok || !known.Readable() {
+		return fmt.Errorf("%w: %s", errUnsupportedClickEventAction, action.Name())
+	}
+	return nil
+}
+
+func (j *Json) validateHoverEvent(action HoverAction) error {
+	if !j.ValidateStrictEvents {
+		return nil
+	}
+	known, ok := HoverActions[action.Name()]
+	if !ok || !known.Readable() {
+		return fmt.Errorf("%w: %s", errUnsupportedHoverEventAction, action.Name())
 	}
 	return nil
 }
@@ -758,7 +818,7 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 					}
 				}
 				if j.shouldEmitShowItemComponents(t) {
-					itemObj[itemComponents] = obj(t.Components)
+					itemObj[itemComponents] = normalizeJsonValue(t.Components)
 				}
 				o[hoverEventContents] = itemObj
 				if !j.NoLegacyHover {
@@ -777,7 +837,7 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 					}
 				}
 				if j.shouldEmitShowItemComponents(t) {
-					o[itemComponents] = obj(t.Components)
+					o[itemComponents] = normalizeJsonValue(t.Components)
 				}
 			}
 		}
@@ -785,9 +845,15 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 	case "show_entity":
 		switch t := event.Value().(type) {
 		case *ShowEntityHoverType:
-			nameObj := obj{}
-			if err := j.encode(nameObj, t.Name); err != nil {
-				return err
+			var nameValue interface{}
+			if text, ok := j.compactTextContent(t.Name); ok {
+				nameValue = text
+			} else {
+				nameObj := obj{}
+				if err := j.encode(nameObj, t.Name); err != nil {
+					return err
+				}
+				nameValue = nameObj
 			}
 
 			if j.UseLegacyHoverEventStructure {
@@ -796,13 +862,13 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 				if j.EmitHoverShowEntityKeyAsTypeAndUuidAsId {
 					// Use legacy field names: "type" and "id"
 					entityObj[entityTypeLegacy] = t.Type.String()
-					entityObj[entityIdLegacy] = t.Id.String()
+					entityObj[entityIdLegacy] = j.encodeUUID(t.Id)
 				} else {
 					// Use modern field names: "id" and "uuid"
 					entityObj[entityType] = t.Type.String()
-					entityObj[entityUuid] = t.Id.String()
+					entityObj[entityUuid] = j.encodeUUID(t.Id)
 				}
-				entityObj[entityName] = nameObj
+				entityObj[entityName] = nameValue
 				o[hoverEventContents] = entityObj
 				if !j.NoLegacyHover {
 					o[hoverEventValue] = entityObj
@@ -812,18 +878,49 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 				if j.EmitHoverShowEntityKeyAsTypeAndUuidAsId {
 					// Use legacy field names: "type" and "id"
 					o[entityTypeLegacy] = t.Type.String()
-					o[entityIdLegacy] = t.Id.String()
+					o[entityIdLegacy] = j.encodeUUID(t.Id)
 				} else {
 					// Use modern field names: "id" and "uuid"
 					o[entityType] = t.Type.String()
-					o[entityUuid] = t.Id.String()
+					o[entityUuid] = j.encodeUUID(t.Id)
 				}
-				o[entityName] = nameObj
+				o[entityName] = nameValue
 			}
 		}
 	}
 
 	return nil
+}
+
+func normalizeJsonValue(v interface{}) interface{} {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		o := obj{}
+		for k, value := range t {
+			o[k] = normalizeJsonValue(value)
+		}
+		return o
+	case []interface{}:
+		a := arr{}
+		for _, value := range t {
+			a = append(a, normalizeJsonValue(value))
+		}
+		return a
+	default:
+		return v
+	}
+}
+
+func (j *Json) encodeUUID(id uuid.UUID) interface{} {
+	if !j.EmitHoverShowEntityIdAsIntArray {
+		return id.String()
+	}
+	return arr{
+		int(int32(binary.BigEndian.Uint32(id[0:4]))),
+		int(int32(binary.BigEndian.Uint32(id[4:8]))),
+		int(int32(binary.BigEndian.Uint32(id[8:12]))),
+		int(int32(binary.BigEndian.Uint32(id[12:16]))),
+	}
 }
 
 func (j *Json) shouldEmitShowItemNBT(item *ShowItemHoverType) bool {
@@ -1277,7 +1374,10 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 		if !ok {
 			return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, fieldName, o[fieldName])
 		}
-		s.ClickEvent = j.decodeClickEvent(obj)
+		s.ClickEvent, err = j.decodeClickEvent(obj)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Support both new (hover_event) and legacy (hoverEvent) field names for maximum compatibility
@@ -1394,6 +1494,9 @@ func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 	}
 	hoverAction, ok := HoverActions[action]
 	if !ok || !hoverAction.Readable() {
+		if j.ValidateStrictEvents {
+			return nil, fmt.Errorf("%w: %s", errUnsupportedHoverEventAction, action)
+		}
 		return nil, nil
 	}
 
@@ -1516,7 +1619,10 @@ func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 	return NewHoverEvent(hoverAction, value), nil
 }
 
-var errUnsupportedHoverEventAction = errors.New("unsupported hover event action")
+var (
+	errUnsupportedHoverEventAction = errors.New("unsupported hover event action")
+	errUnsupportedClickEventAction = errors.New("unsupported click event action")
+)
 
 func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (value interface{}, err error) {
 	var o obj
@@ -1625,17 +1731,20 @@ func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (valu
 }
 
 // may return nil in case object has missing/invalid keys to decode a ClickEvent or Readable() == false
-func (j *Json) decodeClickEvent(o obj) ClickEvent {
+func (j *Json) decodeClickEvent(o obj) (ClickEvent, error) {
 	if !o.Has(clickEventAction) {
-		return nil
+		return nil, nil
 	}
 	action, ok := o[clickEventAction].(string)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	clickAction, ok := ClickActions[action]
 	if !ok || !clickAction.Readable() {
-		return nil
+		if j.ValidateStrictEvents {
+			return nil, fmt.Errorf("%w: %s", errUnsupportedClickEventAction, action)
+		}
+		return nil, nil
 	}
 
 	// Try to extract value using different field names based on action and version
@@ -1710,10 +1819,10 @@ func (j *Json) decodeClickEvent(o obj) ClickEvent {
 	}
 
 	if value == "" {
-		return nil
+		return nil, nil
 	}
 
-	return NewClickEvent(clickAction, value)
+	return NewClickEvent(clickAction, value), nil
 }
 
 func (j *Json) decodeColor(i interface{}) (c col.Color, dec *Decoration, reset bool, err error) {
@@ -1764,6 +1873,20 @@ func (j *Json) decodeUUID(i interface{}) (uuid.UUID, error) {
 	if s, ok := i.(string); ok {
 		return uuid.Parse(s)
 	}
+	if a, ok := i.([]interface{}); ok {
+		if len(a) != 4 {
+			return [16]byte{}, fmt.Errorf("uuid int array must have 4 entries, got %d", len(a))
+		}
+		var id uuid.UUID
+		for idx, value := range a {
+			part, ok := int32JsonNumber(value)
+			if !ok {
+				return [16]byte{}, fmt.Errorf("uuid int array entry %d is not an int32 number", idx)
+			}
+			binary.BigEndian.PutUint32(id[idx*4:(idx+1)*4], uint32(part))
+		}
+		return id, nil
+	}
 	return [16]byte{}, errors.New("must be as string")
 }
 
@@ -1798,6 +1921,14 @@ func (o obj) Has(key string) bool {
 func boolValue(v interface{}) bool {
 	b, _ := v.(bool)
 	return b
+}
+
+func int32JsonNumber(v interface{}) (int32, bool) {
+	f, ok := v.(float64)
+	if !ok || f < -2147483648 || f > 2147483647 || f != float64(int64(f)) {
+		return 0, false
+	}
+	return int32(f), true
 }
 
 func normalizedColorByte(v interface{}) (uint8, bool) {

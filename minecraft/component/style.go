@@ -13,12 +13,13 @@ var (
 type Style struct {
 	Obfuscated, Bold, Strikethrough, Underlined, Italic State
 
-	Font        key.Key
-	Color       color.Color
+	Font       key.Key
+	Color      color.Color
+	ClickEvent ClickEvent
+	HoverEvent HoverEvent
+	Insertion  *string // Gets the string to be inserted when this component is shift-clicked.
+
 	ShadowColor *ShadowColor
-	ClickEvent  ClickEvent
-	HoverEvent  HoverEvent
-	Insertion   *string // Gets the string to be inserted when this component is shift-clicked.
 }
 
 // IsZero reports whether the Style is the zero value.
