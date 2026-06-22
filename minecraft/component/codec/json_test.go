@@ -99,6 +99,20 @@ func TestJson_Unmarshal_text(t *testing.T) {
 	require.Equal(t, txt, c)
 }
 
+func TestJson_Unmarshal_NBTStyleDecorationBooleans(t *testing.T) {
+	c, err := j1215Plus.Unmarshal([]byte(`{"text":"Hello","obfuscated":"1B","italic":"0B","underlined":1,"bold":0}`))
+	require.NoError(t, err)
+	require.Equal(t, &Text{
+		Content: "Hello",
+		S: Style{
+			Obfuscated: True,
+			Italic:     False,
+			Underlined: True,
+			Bold:       False,
+		},
+	}, c)
+}
+
 func TestJson_translation(t *testing.T) {
 	tr := &Translation{
 		Key: "sample.key",

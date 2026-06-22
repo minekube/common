@@ -1244,17 +1244,9 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 	}
 	for dec := range Decorations {
 		if o.Has(string(dec)) {
-			var b bool
-			switch v := o[string(dec)].(type) {
-			case string:
-				b, err = strconv.ParseBool(v)
-				if err != nil {
-					return nil, fmt.Errorf(`value of key %q is not a bool, but %T: %s`, dec, o[string(dec)], v)
-				}
-			case bool:
-				b = v
-			default:
-				return nil, fmt.Errorf(`value of key %q is not a bool, but %T`, dec, o[string(dec)])
+			b, ok := decodeBoolLike(o[string(dec)])
+			if !ok {
+				return nil, fmt.Errorf(`value of key %q is not a bool, but %T: %v`, dec, o[string(dec)], o[string(dec)])
 			}
 			s.SetDecoration(dec, StateByBool(b))
 		}
@@ -1312,6 +1304,53 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 		}
 	}
 	return s, nil
+}
+
+func decodeBoolLike(v interface{}) (bool, bool) {
+	switch b := v.(type) {
+	case bool:
+		return b, true
+	case string:
+		s := strings.TrimSpace(b)
+		if p, err := strconv.ParseBool(s); err == nil {
+			return p, true
+		}
+		s = strings.TrimSuffix(strings.TrimSuffix(s, "b"), "B")
+		switch s {
+		case "1":
+			return true, true
+		case "0":
+			return false, true
+		default:
+			return false, false
+		}
+	case int:
+		return b == 1, b == 0 || b == 1
+	case int8:
+		return b == 1, b == 0 || b == 1
+	case int16:
+		return b == 1, b == 0 || b == 1
+	case int32:
+		return b == 1, b == 0 || b == 1
+	case int64:
+		return b == 1, b == 0 || b == 1
+	case uint:
+		return b == 1, b == 0 || b == 1
+	case uint8:
+		return b == 1, b == 0 || b == 1
+	case uint16:
+		return b == 1, b == 0 || b == 1
+	case uint32:
+		return b == 1, b == 0 || b == 1
+	case uint64:
+		return b == 1, b == 0 || b == 1
+	case float32:
+		return b == 1, b == 0 || b == 1
+	case float64:
+		return b == 1, b == 0 || b == 1
+	default:
+		return false, false
+	}
 }
 
 func (j *Json) decodeShadowColor(v interface{}) (*ShadowColor, error) {
