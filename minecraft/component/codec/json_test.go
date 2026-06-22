@@ -123,6 +123,146 @@ func TestJson_translation(t *testing.T) {
 	require.Equal(t, tr, tr2)
 }
 
+func TestJson_TranslationFallback(t *testing.T) {
+	tr := &Translation{
+		Key:      "sample.missing",
+		Fallback: "Fallback text",
+	}
+	s := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(s, tr))
+	require.Equal(t, `{"fallback":"Fallback text","translate":"sample.missing"}`, s.String())
+
+	tr2, err := j1215Plus.Unmarshal([]byte(s.String()))
+	require.NoError(t, err)
+	require.Equal(t, tr, tr2)
+}
+
+func TestJson_ModernContentTypes(t *testing.T) {
+	storage, _ := key.Parse("example:storage")
+	components := []Component{
+		&Score{Name: "@s", Objective: "kills", Value: "10"},
+		&Selector{Pattern: "@a", Separator: &Text{Content: ", "}},
+		&Keybind{Key: "key.jump"},
+		&BlockNBT{NBT: NBT{Path: "Items[0].id", Interpret: true, Separator: &Text{Content: " | "}}, Block: "~ ~ ~"},
+		&EntityNBT{NBT: NBT{Path: "Health", Plain: true}, Entity: "@s"},
+		&StorageNBT{NBT: NBT{Path: "value"}, Storage: storage},
+	}
+
+	for _, component := range components {
+		encoded := new(strings.Builder)
+		require.NoError(t, j1215Plus.Marshal(encoded, component))
+
+		decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+		require.NoError(t, err)
+		require.Equal(t, component, decoded)
+	}
+}
+
+func TestJson_DecodePrimitiveShorthand(t *testing.T) {
+	c, err := j1215Plus.Unmarshal([]byte(`true`))
+	require.NoError(t, err)
+	require.Equal(t, &Text{Content: "true"}, c)
+
+	c, err = j1215Plus.Unmarshal([]byte(`12`))
+	require.NoError(t, err)
+	require.Equal(t, &Text{Content: "12"}, c)
+}
+
+func TestJson_StyleShadowColor(t *testing.T) {
+	component := &Text{
+		Content: "Shadow",
+		S: Style{
+			ShadowColor: ShadowColorFromARGB(0x80445566),
+		},
+	}
+
+	encoded := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(encoded, component))
+	require.Equal(t, `{"shadow_color":-2143005338,"text":"Shadow"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(`{"shadow_color":[0.26666666666666666,0.3333333333333333,0.4,0.5019607843137255],"text":"Shadow"}`))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ShowItemModernComponents(t *testing.T) {
+	diamond, _ := key.Parse("minecraft:diamond")
+	component := &Text{
+		Content: "Hover",
+		S: Style{HoverEvent: ShowItem(&ShowItemHoverType{
+			Item:  diamond,
+			Count: 1,
+			Components: map[string]interface{}{
+				"minecraft:custom_name": map[string]interface{}{"text": "Spark"},
+			},
+		})},
+	}
+
+	encoded := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(encoded, component))
+	require.Equal(t, `{"hover_event":{"action":"show_item","components":{"minecraft:custom_name":{"text":"Spark"}},"count":1,"id":"minecraft:diamond"},"text":"Hover"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ObjectComponent_AtlasSprite(t *testing.T) {
+	blocks, _ := key.Parse("minecraft:blocks")
+	diamond, _ := key.Parse("minecraft:item/diamond")
+	component := AtlasSprite(blocks, diamond)
+
+	encoded := new(strings.Builder)
+	err := j1215Plus.Marshal(encoded, component)
+	require.NoError(t, err)
+	require.Equal(t, `{"atlas":"minecraft:blocks","object":"atlas","sprite":"minecraft:item/diamond"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ObjectComponent_DecodeAdventureSpriteShape(t *testing.T) {
+	decoded, err := j1215Plus.Unmarshal([]byte(`{"fallback":"diamond","sprite":"item/diamond"}`))
+	require.NoError(t, err)
+
+	diamond, _ := key.Parse("minecraft:item/diamond")
+	expected := AtlasSprite(DefaultSpriteAtlas, diamond)
+	expected.Fallback = &Text{Content: "diamond"}
+	require.Equal(t, expected, decoded)
+}
+
+func TestJson_ObjectComponent_PlayerHeadWithFallback(t *testing.T) {
+	id := uuid.MustParse("12345678-1234-1234-1234-123456789abc")
+	component := PlayerHead(&PlayerProfile{
+		Name: "jeb_",
+		Id:   id,
+	}, false)
+	component.Fallback = &Text{Content: "jeb_"}
+
+	encoded := new(strings.Builder)
+	err := j1215Plus.Marshal(encoded, component)
+	require.NoError(t, err)
+	require.Equal(t, `{"fallback":{"text":"jeb_"},"hat":false,"object":"player","player":{"id":"12345678-1234-1234-1234-123456789abc","name":"jeb_"}}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ObjectComponent_PlayerNameShortcut(t *testing.T) {
+	component := PlayerHead(&PlayerProfile{Name: "jeb_"}, true)
+
+	encoded := new(strings.Builder)
+	err := j1215Plus.Marshal(encoded, component)
+	require.NoError(t, err)
+	require.Equal(t, `{"hat":true,"object":"player","player":"jeb_"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
 // Test encoding with new format (1.21.5+)
 func TestJson_Marshal_NewFormat(t *testing.T) {
 	b := new(strings.Builder)

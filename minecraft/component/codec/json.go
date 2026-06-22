@@ -302,6 +302,20 @@ func (j *Json) encode(o obj, c Component) (err error) {
 		return j.encodeText(o, t)
 	case *Translation:
 		return j.encodeTranslation(o, t)
+	case *Score:
+		return j.encodeScore(o, t)
+	case *Selector:
+		return j.encodeSelector(o, t)
+	case *Keybind:
+		return j.encodeKeybind(o, t)
+	case *BlockNBT:
+		return j.encodeBlockNBT(o, t)
+	case *EntityNBT:
+		return j.encodeEntityNBT(o, t)
+	case *StorageNBT:
+		return j.encodeStorageNBT(o, t)
+	case *Object:
+		return j.encodeObject(o, t)
 	default:
 		return fmt.Errorf("codec.Json marshal: unsupported component type %T", c)
 	}
@@ -314,10 +328,44 @@ const (
 
 	translate     = "translate"
 	translateWith = "with"
+	fallback      = "fallback"
 
-	font      = "font"
-	color     = "color"
-	insertion = "insertion"
+	score          = "score"
+	scoreName      = "name"
+	scoreObjective = "objective"
+	scoreValue     = "value"
+
+	selector = "selector"
+	keybind  = "keybind"
+
+	nbtKey    = "nbt"
+	interpret = "interpret"
+	plain     = "plain"
+	block     = "block"
+	entity    = "entity"
+	storage   = "storage"
+	separator = "separator"
+
+	object = "object"
+
+	objectAtlas  = "atlas"
+	objectSprite = "sprite"
+	objectPlayer = "player"
+	objectHat    = "hat"
+
+	playerName       = "name"
+	playerId         = "id"
+	playerProperties = "properties"
+	playerTexture    = "texture"
+
+	profilePropertyName      = "name"
+	profilePropertyValue     = "value"
+	profilePropertySignature = "signature"
+
+	font        = "font"
+	color       = "color"
+	shadowColor = "shadow_color"
+	insertion   = "insertion"
 
 	// New format (1.21.5+): snake_case field names
 	clickEvent = "click_event"
@@ -354,9 +402,10 @@ const (
 	hoverEventText = "value" // Note: was "text" in 25w02a, changed back to "value" in 25w03a
 
 	// For show_item action (inlined from contents)
-	itemId    = "id"
-	itemCount = "count"
-	itemTag   = "tag"
+	itemId         = "id"
+	itemCount      = "count"
+	itemTag        = "tag"
+	itemComponents = "components"
 
 	// For show_entity action (inlined from contents, with field renames)
 	entityType = "id"   // renamed from "type" in 1.21.5+
@@ -380,7 +429,152 @@ func (j *Json) encodeTranslation(o obj, t *Translation) error {
 		return nil
 	}
 	o[translate] = t.Key
+	if t.Fallback != "" {
+		o[fallback] = t.Fallback
+	}
 	return j.encodeComponent(o, t, translateWith)
+}
+
+func (j *Json) encodeScore(o obj, s *Score) error {
+	if s == nil {
+		return nil
+	}
+	scoreObj := obj{
+		scoreName:      s.Name,
+		scoreObjective: s.Objective,
+	}
+	if s.Value != "" {
+		scoreObj[scoreValue] = s.Value
+	}
+	o[score] = scoreObj
+	return j.encodeComponent(o, s, extra)
+}
+
+func (j *Json) encodeSelector(o obj, s *Selector) error {
+	if s == nil {
+		return nil
+	}
+	o[selector] = s.Pattern
+	if s.Separator != nil {
+		separatorObj := obj{}
+		if err := j.encode(separatorObj, s.Separator); err != nil {
+			return err
+		}
+		o[separator] = separatorObj
+	}
+	return j.encodeComponent(o, s, extra)
+}
+
+func (j *Json) encodeKeybind(o obj, k *Keybind) error {
+	if k == nil {
+		return nil
+	}
+	o[keybind] = k.Key
+	return j.encodeComponent(o, k, extra)
+}
+
+func (j *Json) encodeBlockNBT(o obj, n *BlockNBT) error {
+	if n == nil {
+		return nil
+	}
+	o[block] = n.Block
+	return j.encodeNBT(o, &n.NBT)
+}
+
+func (j *Json) encodeEntityNBT(o obj, n *EntityNBT) error {
+	if n == nil {
+		return nil
+	}
+	o[entity] = n.Entity
+	return j.encodeNBT(o, &n.NBT)
+}
+
+func (j *Json) encodeStorageNBT(o obj, n *StorageNBT) error {
+	if n == nil {
+		return nil
+	}
+	if n.Storage != nil {
+		o[storage] = n.Storage.String()
+	}
+	return j.encodeNBT(o, &n.NBT)
+}
+
+func (j *Json) encodeNBT(o obj, n *NBT) error {
+	o[nbtKey] = n.Path
+	o[interpret] = n.Interpret
+	o[plain] = n.Plain
+	if n.Separator != nil {
+		separatorObj := obj{}
+		if err := j.encode(separatorObj, n.Separator); err != nil {
+			return err
+		}
+		o[separator] = separatorObj
+	}
+	return j.encodeComponent(o, n, extra)
+}
+
+func (j *Json) encodeObject(o obj, c *Object) error {
+	if c == nil {
+		return nil
+	}
+	if c.Fallback != nil {
+		fallbackObj := obj{}
+		if err := j.encode(fallbackObj, c.Fallback); err != nil {
+			return err
+		}
+		o[fallback] = fallbackObj
+	}
+	switch contents := c.Contents.(type) {
+	case *SpriteObjectContents:
+		o[object] = objectAtlas
+		if contents.Atlas != nil {
+			o[objectAtlas] = contents.Atlas.String()
+		}
+		if contents.Sprite != nil {
+			o[objectSprite] = contents.Sprite.String()
+		}
+	case *PlayerHeadObjectContents:
+		o[object] = objectPlayer
+		o[objectHat] = contents.Hat
+		o[objectPlayer] = j.encodePlayerProfile(contents.Profile)
+	default:
+		return fmt.Errorf("codec.Json marshal: unsupported object contents type %T", c.Contents)
+	}
+	return j.encodeComponent(o, c, extra)
+}
+
+func (j *Json) encodePlayerProfile(profile *PlayerProfile) interface{} {
+	if profile == nil {
+		return obj{}
+	}
+	if profile.Name != "" && profile.Id == uuid.Nil && len(profile.Properties) == 0 && profile.Texture == nil {
+		return profile.Name
+	}
+	o := obj{}
+	if profile.Name != "" {
+		o[playerName] = profile.Name
+	}
+	if profile.Id != uuid.Nil {
+		o[playerId] = profile.Id.String()
+	}
+	if len(profile.Properties) != 0 {
+		properties := make(arr, 0, len(profile.Properties))
+		for _, property := range profile.Properties {
+			propertyObj := obj{
+				profilePropertyName:  property.Name,
+				profilePropertyValue: property.Value,
+			}
+			if property.Signature != "" {
+				propertyObj[profilePropertySignature] = property.Signature
+			}
+			properties = append(properties, propertyObj)
+		}
+		o[playerProperties] = properties
+	}
+	if profile.Texture != nil {
+		o[playerTexture] = profile.Texture.String()
+	}
+	return o
 }
 
 func (j *Json) encodeComponent(o obj, c Component, childrenKey string) (err error) {
@@ -413,6 +607,9 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 	}
 	if s.Color != nil {
 		o[color] = j.encodeColor(s.Color)
+	}
+	if s.ShadowColor != nil && j.ShadowColorMode != ShadowColorEmitModeNone {
+		o[shadowColor] = j.encodeShadowColor(s.ShadowColor)
 	}
 	for name := range Decorations {
 		state := s.Decoration(name)
@@ -501,6 +698,23 @@ func (j *Json) encodeStyle(o obj, s *Style) error {
 	return nil
 }
 
+func (j *Json) encodeShadowColor(c *ShadowColor) interface{} {
+	if c == nil {
+		return nil
+	}
+	switch j.ShadowColorMode {
+	case ShadowColorEmitModeArray:
+		return arr{
+			float64((c.ARGB>>16)&0xff) / 255,
+			float64((c.ARGB>>8)&0xff) / 255,
+			float64(c.ARGB&0xff) / 255,
+			float64((c.ARGB>>24)&0xff) / 255,
+		}
+	default:
+		return int(int32(c.ARGB))
+	}
+}
+
 func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 	o[hoverEventAction] = event.Action().Name()
 
@@ -543,6 +757,9 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 				if t.NBT != nil {
 					itemObj[itemTag] = t.NBT.String()
 				}
+				if len(t.Components) != 0 {
+					itemObj[itemComponents] = obj(t.Components)
+				}
 				o[hoverEventContents] = itemObj
 				if !j.NoLegacyHover {
 					o[hoverEventValue] = itemObj
@@ -556,6 +773,9 @@ func (j *Json) encodeHoverEvent(o obj, event HoverEvent) error {
 				}
 				if t.NBT != nil {
 					o[itemTag] = t.NBT.String()
+				}
+				if len(t.Components) != 0 {
+					o[itemComponents] = obj(t.Components)
 				}
 			}
 		}
@@ -629,6 +849,10 @@ func (j *Json) decodeFromInterface(i interface{}) (Component, error) {
 		return j.decodeComponent(t)
 	case string:
 		return &Text{Content: t}, nil
+	case bool:
+		return &Text{Content: strconv.FormatBool(t)}, nil
+	case float64:
+		return &Text{Content: strconv.FormatFloat(t, 'f', -1, 64)}, nil
 	case []interface{}:
 		return j.decodeFromInterfaceSlice(t)
 	default:
@@ -660,6 +884,10 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 		c = &Text{Content: fmt.Sprint(o[text])}
 	} else if o.Has(translate) {
 		k := fmt.Sprint(o[translate])
+		f := ""
+		if o.Has(fallback) {
+			f = fmt.Sprint(o[fallback])
+		}
 		if o.Has(translateWith) {
 			with, ok := o[translateWith].([]interface{})
 			if !ok {
@@ -674,11 +902,34 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 				args = append(args, a)
 			}
 			c = &Translation{
-				Key:  k,
-				With: args,
+				Key:      k,
+				Fallback: f,
+				With:     args,
 			}
 		} else {
-			c = &Translation{Key: k}
+			c = &Translation{Key: k, Fallback: f}
+		}
+	} else if o.Has(score) {
+		c, err = j.decodeScore(o)
+		if err != nil {
+			return nil, err
+		}
+	} else if o.Has(selector) {
+		c, err = j.decodeSelector(o)
+		if err != nil {
+			return nil, err
+		}
+	} else if o.Has(keybind) {
+		c = &Keybind{Key: fmt.Sprint(o[keybind])}
+	} else if o.Has(nbtKey) {
+		c, err = j.decodeNBT(o)
+		if err != nil {
+			return nil, err
+		}
+	} else if o.Has(object) || o.Has(objectSprite) || o.Has(objectPlayer) {
+		c, err = j.decodeObject(o)
+		if err != nil {
+			return nil, err
 		}
 	} else {
 		c = &Text{}
@@ -708,6 +959,224 @@ func (j *Json) decodeComponent(o obj) (c Component, err error) {
 	return c, nil
 }
 
+func (j *Json) decodeScore(o obj) (*Score, error) {
+	scoreObj, ok := o[score].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf(`value of key %q is not a json object, but %T`, score, o[score])
+	}
+	s := &Score{
+		Name:      fmt.Sprint(scoreObj[scoreName]),
+		Objective: fmt.Sprint(scoreObj[scoreObjective]),
+	}
+	if v, ok := scoreObj[scoreValue]; ok {
+		s.Value = fmt.Sprint(v)
+	}
+	return s, nil
+}
+
+func (j *Json) decodeSelector(o obj) (*Selector, error) {
+	s := &Selector{Pattern: fmt.Sprint(o[selector])}
+	if o.Has(separator) {
+		separator, err := j.decodeFromInterface(o[separator])
+		if err != nil {
+			return nil, fmt.Errorf(`error decoding selector separator: %v`, err)
+		}
+		s.Separator = separator
+	}
+	return s, nil
+}
+
+func (j *Json) decodeNBT(o obj) (Component, error) {
+	base := NBT{
+		Path:      fmt.Sprint(o[nbtKey]),
+		Interpret: boolValue(o[interpret]),
+		Plain:     boolValue(o[plain]),
+	}
+	if base.Interpret && base.Plain {
+		return nil, errors.New("nbt component cannot have both interpret and plain set to true")
+	}
+	if o.Has(separator) {
+		separator, err := j.decodeFromInterface(o[separator])
+		if err != nil {
+			return nil, fmt.Errorf(`error decoding nbt separator: %v`, err)
+		}
+		base.Separator = separator
+	}
+	if o.Has(block) {
+		return &BlockNBT{NBT: base, Block: fmt.Sprint(o[block])}, nil
+	}
+	if o.Has(entity) {
+		return &EntityNBT{NBT: base, Entity: fmt.Sprint(o[entity])}, nil
+	}
+	if o.Has(storage) {
+		storage, err := j.decodeNamespacedKey(o[storage])
+		if err != nil {
+			return nil, fmt.Errorf(`error decoding nbt storage: %v`, err)
+		}
+		return &StorageNBT{NBT: base, Storage: storage}, nil
+	}
+	return nil, errors.New("nbt component requires one of block, entity, or storage")
+}
+
+func (j *Json) decodeObject(o obj) (*Object, error) {
+	objectType := o.String(object)
+	if objectType == "" {
+		switch {
+		case o.Has(objectSprite):
+			objectType = objectAtlas
+		case o.Has(objectPlayer):
+			objectType = objectPlayer
+		}
+	}
+
+	c := &Object{}
+	if o.Has(fallback) {
+		fallback, err := j.decodeFromInterface(o[fallback])
+		if err != nil {
+			return nil, fmt.Errorf(`error decoding object component fallback: %v`, err)
+		}
+		c.Fallback = fallback
+	}
+
+	switch objectType {
+	case objectAtlas:
+		if !o.Has(objectSprite) {
+			return nil, fmt.Errorf(`object component of type %q misses key %q`, objectAtlas, objectSprite)
+		}
+		atlas := DefaultSpriteAtlas
+		if o.Has(objectAtlas) {
+			k, err := j.decodeNamespacedKey(o[objectAtlas])
+			if err != nil {
+				return nil, fmt.Errorf(`error decoding object component atlas: %v`, err)
+			}
+			atlas = k
+		}
+		sprite, err := j.decodeNamespacedKey(o[objectSprite])
+		if err != nil {
+			return nil, fmt.Errorf(`error decoding object component sprite: %v`, err)
+		}
+		c.Contents = &SpriteObjectContents{
+			Atlas:  atlas,
+			Sprite: sprite,
+		}
+	case objectPlayer:
+		profile, err := j.decodePlayerProfile(o[objectPlayer])
+		if err != nil {
+			return nil, err
+		}
+		hat := true
+		if o.Has(objectHat) {
+			v, ok := o[objectHat].(bool)
+			if !ok {
+				return nil, fmt.Errorf(`object component's value of key %q is not a bool, but %T`, objectHat, o[objectHat])
+			}
+			hat = v
+		}
+		c.Contents = &PlayerHeadObjectContents{
+			Profile: profile,
+			Hat:     hat,
+		}
+	default:
+		return nil, fmt.Errorf("unsupported object component type %q", objectType)
+	}
+
+	return c, nil
+}
+
+func (j *Json) decodePlayerProfile(v interface{}) (*PlayerProfile, error) {
+	switch t := v.(type) {
+	case string:
+		return &PlayerProfile{Name: t}, nil
+	case map[string]interface{}:
+		o := obj(t)
+		profile := &PlayerProfile{}
+		if o.Has(playerName) {
+			name, ok := o[playerName].(string)
+			if !ok {
+				return nil, fmt.Errorf(`player profile's value of key %q is not a string, but %T`, playerName, o[playerName])
+			}
+			profile.Name = name
+		}
+		if o.Has(playerId) {
+			id, err := j.decodeUUID(o[playerId])
+			if err != nil {
+				return nil, fmt.Errorf(`error decoding player profile id: %v`, err)
+			}
+			profile.Id = id
+		}
+		if o.Has(playerProperties) {
+			properties, err := j.decodeProfileProperties(o[playerProperties])
+			if err != nil {
+				return nil, err
+			}
+			profile.Properties = properties
+		}
+		if o.Has(playerTexture) {
+			texture, err := j.decodeNamespacedKey(o[playerTexture])
+			if err != nil {
+				return nil, fmt.Errorf(`error decoding player profile texture: %v`, err)
+			}
+			profile.Texture = texture
+		}
+		return profile, nil
+	default:
+		return nil, fmt.Errorf(`object component's value of key %q is not a string or object, but %T`, objectPlayer, v)
+	}
+}
+
+func (j *Json) decodeProfileProperties(v interface{}) ([]ProfileProperty, error) {
+	switch t := v.(type) {
+	case []interface{}:
+		properties := make([]ProfileProperty, 0, len(t))
+		for _, entry := range t {
+			propertyObj, ok := entry.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf(`player profile property is not an object, but %T`, entry)
+			}
+			property, err := j.decodeProfileProperty(propertyObj)
+			if err != nil {
+				return nil, err
+			}
+			properties = append(properties, property)
+		}
+		return properties, nil
+	case map[string]interface{}:
+		properties := make([]ProfileProperty, 0, len(t))
+		for name, value := range t {
+			propertyValue, ok := value.(string)
+			if !ok {
+				return nil, fmt.Errorf(`player profile property %q is not a string, but %T`, name, value)
+			}
+			properties = append(properties, ProfileProperty{Name: name, Value: propertyValue})
+		}
+		return properties, nil
+	default:
+		return nil, fmt.Errorf(`player profile's value of key %q is not an array or object, but %T`, playerProperties, v)
+	}
+}
+
+func (j *Json) decodeProfileProperty(o obj) (ProfileProperty, error) {
+	property := ProfileProperty{}
+	name, ok := o[profilePropertyName].(string)
+	if !ok {
+		return property, fmt.Errorf(`player profile property misses string key %q`, profilePropertyName)
+	}
+	value, ok := o[profilePropertyValue].(string)
+	if !ok {
+		return property, fmt.Errorf(`player profile property misses string key %q`, profilePropertyValue)
+	}
+	property.Name = name
+	property.Value = value
+	if o.Has(profilePropertySignature) {
+		signature, ok := o[profilePropertySignature].(string)
+		if !ok {
+			return property, fmt.Errorf(`player profile property's value of key %q is not a string, but %T`, profilePropertySignature, o[profilePropertySignature])
+		}
+		property.Signature = signature
+	}
+	return property, nil
+}
+
 func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 	s = &Style{}
 	if o.Has(font) {
@@ -728,6 +1197,13 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 			// Setting a decoration from a color is, unfortunately, something we need to support.
 			s.SetDecoration(*dec, True)
 		}
+	}
+	if o.Has(shadowColor) {
+		c, err := j.decodeShadowColor(o[shadowColor])
+		if err != nil {
+			return nil, fmt.Errorf(`error decoding value of %q key: %v`, shadowColor, err)
+		}
+		s.ShadowColor = c
 	}
 	for dec := range Decorations {
 		if o.Has(string(dec)) {
@@ -801,6 +1277,36 @@ func (j *Json) decodeStyle(o obj) (s *Style, err error) {
 	return s, nil
 }
 
+func (j *Json) decodeShadowColor(v interface{}) (*ShadowColor, error) {
+	switch t := v.(type) {
+	case float64:
+		return &ShadowColor{ARGB: uint32(int32(t))}, nil
+	case []interface{}:
+		if len(t) != 4 {
+			return nil, fmt.Errorf("shadow color array must have 4 entries, got %d", len(t))
+		}
+		r, ok := normalizedColorByte(t[0])
+		if !ok {
+			return nil, fmt.Errorf("shadow color red component is not a number")
+		}
+		g, ok := normalizedColorByte(t[1])
+		if !ok {
+			return nil, fmt.Errorf("shadow color green component is not a number")
+		}
+		b, ok := normalizedColorByte(t[2])
+		if !ok {
+			return nil, fmt.Errorf("shadow color blue component is not a number")
+		}
+		a, ok := normalizedColorByte(t[3])
+		if !ok {
+			return nil, fmt.Errorf("shadow color alpha component is not a number")
+		}
+		return &ShadowColor{ARGB: uint32(a)<<24 | uint32(r)<<16 | uint32(g)<<8 | uint32(b)}, nil
+	default:
+		return nil, fmt.Errorf("must be a number or 4-element array, but %T", v)
+	}
+}
+
 // may return nil,nil in case object has missing/invalid keys to decode a HoverEvent or Readable() == false
 func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 	if !o.Has(hoverEventAction) {
@@ -858,6 +1364,14 @@ func (j *Json) decodeHoverEvent(o obj) (h HoverEvent, err error) {
 						itemTag, o[itemTag])
 				}
 				h.NBT = nbt.NewBinaryTagHolder(s)
+			}
+			if o.Has(itemComponents) {
+				components, ok := o[itemComponents].(map[string]interface{})
+				if !ok {
+					return nil, fmt.Errorf(`show item hover event's value of key %q is not an object, but %T`,
+						itemComponents, o[itemComponents])
+				}
+				h.Components = components
 			}
 			value = &h
 		} else if o.Has(hoverEventContents) {
@@ -985,6 +1499,14 @@ func (j *Json) decodeHoverEventContents(v interface{}, action HoverAction) (valu
 					itemTag, o[itemTag])
 			}
 			h.NBT = nbt.NewBinaryTagHolder(s)
+		}
+		if o.Has(itemComponents) {
+			components, ok := o[itemComponents].(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf(`show entity hover event's value of key %q is not an object, but %T`,
+					itemComponents, o[itemComponents])
+			}
+			h.Components = components
 		}
 		return &h, nil
 	case equalFold(ShowEntityAction, action):
@@ -1151,6 +1673,17 @@ func (j *Json) decodeKey(i interface{}) (key.Key, error) {
 	return nil, errors.New("must be as string")
 }
 
+func (j *Json) decodeNamespacedKey(i interface{}) (key.Key, error) {
+	s, ok := i.(string)
+	if !ok {
+		return nil, errors.New("must be as string")
+	}
+	if !strings.Contains(s, ":") {
+		s = key.MinecraftNamespace + ":" + s
+	}
+	return key.ParseValid(s)
+}
+
 func (j *Json) decodeUUID(i interface{}) (uuid.UUID, error) {
 	if s, ok := i.(string); ok {
 		return uuid.Parse(s)
@@ -1184,6 +1717,25 @@ func (o obj) String(key string) string {
 func (o obj) Has(key string) bool {
 	_, ok := o[key]
 	return ok
+}
+
+func boolValue(v interface{}) bool {
+	b, _ := v.(bool)
+	return b
+}
+
+func normalizedColorByte(v interface{}) (uint8, bool) {
+	f, ok := v.(float64)
+	if !ok {
+		return 0, false
+	}
+	if f < 0 {
+		f = 0
+	}
+	if f > 1 {
+		f = 1
+	}
+	return uint8(f*255 + 0.5), true
 }
 
 func (o obj) MarshalJSONObject(enc *gojay.Encoder) {

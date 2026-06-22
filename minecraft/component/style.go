@@ -13,11 +13,12 @@ var (
 type Style struct {
 	Obfuscated, Bold, Strikethrough, Underlined, Italic State
 
-	Font       key.Key
-	Color      color.Color
-	ClickEvent ClickEvent
-	HoverEvent HoverEvent
-	Insertion  *string // Gets the string to be inserted when this component is shift-clicked.
+	Font        key.Key
+	Color       color.Color
+	ShadowColor *ShadowColor
+	ClickEvent  ClickEvent
+	HoverEvent  HoverEvent
+	Insertion   *string // Gets the string to be inserted when this component is shift-clicked.
 }
 
 // IsZero reports whether the Style is the zero value.
@@ -30,6 +31,7 @@ func (s *Style) IsZero() bool {
 			s.Italic == NotSet &&
 			s.Font == nil &&
 			s.Color == nil &&
+			s.ShadowColor == nil &&
 			s.ClickEvent == nil &&
 			s.HoverEvent == nil &&
 			s.Insertion == nil)
@@ -92,4 +94,12 @@ func StateByBool(b bool) State {
 		return True
 	}
 	return False
+}
+
+type ShadowColor struct {
+	ARGB uint32
+}
+
+func ShadowColorFromARGB(argb int) *ShadowColor {
+	return &ShadowColor{ARGB: uint32(argb)}
 }
