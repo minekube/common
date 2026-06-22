@@ -211,9 +211,9 @@ var (
 		StdJson:                                 true,
 	}
 
-	// JsonModern is optimized for Minecraft clients 1.21.5+.
+	// JsonModern is optimized for modern Minecraft clients.
 	// Features: snake_case field names, specific click fields, inlined hover structure,
-	// all modern features enabled.
+	// shadow colors, modern object components when used, and lossless show_item data.
 	JsonModern = &Json{
 		UseLegacyFieldNames:                     false, // snake_case field names
 		UseLegacyClickEventStructure:            false, // Specific fields (url, path, command, etc.)
@@ -232,7 +232,7 @@ var (
 	}
 
 	// JsonUniversal provides maximum compatibility - can decode any format
-	// but encodes in modern format. Recommended for most use cases.
+	// but encodes in modern format with lossless show_item data. Recommended for most use cases.
 	JsonUniversal = &Json{
 		UseLegacyFieldNames:                     false, // Encode in modern format
 		UseLegacyClickEventStructure:            false, // Encode in modern format

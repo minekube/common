@@ -121,8 +121,8 @@ j := &codec.Json{
 | `JsonPre1_16`   | Before 1.16     | camelCase   | Universal "value" | Legacy + value    | Color downsampling          |
 | `JsonPre1_20_3` | 1.16 - 1.20.2   | camelCase   | Universal "value" | Legacy + contents | Hex colors                  |
 | `JsonPre1_21_5` | 1.20.3 - 1.21.4 | camelCase   | Universal "value" | Legacy + contents | Compact text, int UUIDs     |
-| `JsonModern`    | 1.21.5+         | snake_case  | Specific fields   | Inlined           | All modern features         |
-| `JsonUniversal` | Any             | snake_case  | Specific fields   | Inlined           | Decodes all, encodes modern |
+| `JsonModern`    | Modern clients  | snake_case  | Specific fields   | Inlined           | Shadow/object components, lossless item hover data |
+| `JsonUniversal` | Any             | snake_case  | Specific fields   | Inlined           | Decodes all, encodes modern losslessly |
 
 ### ⚙️ Advanced JSON Configuration Options
 
