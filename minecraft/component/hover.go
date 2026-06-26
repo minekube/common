@@ -72,9 +72,10 @@ func (a *hoverAction) String() string {
 }
 
 type ShowItemHoverType struct {
-	Item  key.Key
-	Count int
-	NBT   nbt.BinaryTagHolder // nil-able
+	Item       key.Key
+	Count      int
+	NBT        nbt.BinaryTagHolder // nil-able
+	Components map[string]interface{}
 }
 
 type ShowEntityHoverType struct {

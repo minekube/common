@@ -2,6 +2,7 @@ package codec
 
 import (
 	"io/ioutil"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -80,10 +81,10 @@ var (
 		}}
 
 	// New format JSON (1.21.5+) - uses snake_case field names and new structures
-	jsonTxtNew = `{"bold":false,"click_event":{"action":"suggest_command","command":"/help"},"color":"#55ffff","extra":[{"color":"#ff5555","italic":true,"obfuscated":false,"text":" there!"}],"font":"minecraft:default","hover_event":{"action":"show_text","value":{"extra":[{"text":"!"}],"text":" world"}},"insertion":"insert me","italic":false,"obfuscated":true,"text":"Hello","underlined":true}`
+	jsonTxtNew = `{"bold":false,"click_event":{"action":"suggest_command","command":"/help"},"color":"#55ffff","extra":[{"color":"#ff5555","italic":true,"obfuscated":false,"text":" there!"}],"font":"minecraft:default","hover_event":{"action":"show_text","value":{"extra":["!"],"text":" world"}},"insertion":"insert me","italic":false,"obfuscated":true,"text":"Hello","underlined":true}`
 
 	// Legacy format JSON (pre-1.21.5) - uses camelCase field names and legacy structures
-	jsonTxtLegacy = `{"bold":false,"clickEvent":{"action":"suggest_command","value":"/help"},"color":"#55ffff","extra":[{"color":"#ff5555","italic":true,"obfuscated":false,"text":" there!"}],"font":"minecraft:default","hoverEvent":{"action":"show_text","contents":{"extra":[{"text":"!"}],"text":" world"},"value":{"extra":[{"text":"!"}],"text":" world"}},"insertion":"insert me","italic":false,"obfuscated":true,"text":"Hello","underlined":true}`
+	jsonTxtLegacy = `{"bold":false,"clickEvent":{"action":"suggest_command","value":"/help"},"color":"#55ffff","extra":[{"color":"#ff5555","italic":true,"obfuscated":false,"text":" there!"}],"font":"minecraft:default","hoverEvent":{"action":"show_text","contents":{"extra":["!"],"text":" world"},"value":{"extra":["!"],"text":" world"}},"insertion":"insert me","italic":false,"obfuscated":true,"text":"Hello","underlined":true}`
 )
 
 func TestJson_Marshal_text(t *testing.T) {
@@ -97,6 +98,20 @@ func TestJson_Unmarshal_text(t *testing.T) {
 	c, err := j1215Plus.Unmarshal([]byte(jsonTxtNew))
 	require.NoError(t, err)
 	require.Equal(t, txt, c)
+}
+
+func TestJson_Unmarshal_NBTStyleDecorationBooleans(t *testing.T) {
+	c, err := j1215Plus.Unmarshal([]byte(`{"text":"Hello","obfuscated":"1B","italic":"0B","underlined":1,"bold":0}`))
+	require.NoError(t, err)
+	require.Equal(t, &Text{
+		Content: "Hello",
+		S: Style{
+			Obfuscated: True,
+			Italic:     False,
+			Underlined: True,
+			Bold:       False,
+		},
+	}, c)
 }
 
 func TestJson_translation(t *testing.T) {
@@ -115,12 +130,343 @@ func TestJson_translation(t *testing.T) {
 	}
 	s := new(strings.Builder)
 	require.NoError(t, j1215Plus.Marshal(s, tr))
-	const exp = `{"color":"#ff5555","translate":"sample.key","with":[{"text":"Hello"},{"translate":"another.key"}]}`
+	const exp = `{"color":"#ff5555","translate":"sample.key","with":["Hello",{"translate":"another.key"}]}`
 	require.Equal(t, exp, s.String())
 
 	tr2, err := j1215Plus.Unmarshal([]byte(exp))
 	require.NoError(t, err)
 	require.Equal(t, tr, tr2)
+}
+
+func TestJson_TranslationFallback(t *testing.T) {
+	tr := &Translation{
+		Key:      "sample.missing",
+		Fallback: "Fallback text",
+	}
+	s := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(s, tr))
+	require.Equal(t, `{"fallback":"Fallback text","translate":"sample.missing"}`, s.String())
+
+	tr2, err := j1215Plus.Unmarshal([]byte(s.String()))
+	require.NoError(t, err)
+	require.Equal(t, tr, tr2)
+}
+
+func TestJson_ModernContentTypes(t *testing.T) {
+	storage, _ := key.Parse("example:storage")
+	components := []Component{
+		&Score{Name: "@s", Objective: "kills", Value: "10"},
+		&Selector{Pattern: "@a", Separator: &Text{Content: ", "}},
+		&Keybind{Key: "key.jump"},
+		&BlockNBT{NBT: NBT{Path: "Items[0].id", Interpret: true, Separator: &Text{Content: " | "}}, Block: "~ ~ ~"},
+		&EntityNBT{NBT: NBT{Path: "Health", Plain: true}, Entity: "@s"},
+		&StorageNBT{NBT: NBT{Path: "value"}, Storage: storage},
+	}
+
+	for _, component := range components {
+		encoded := new(strings.Builder)
+		require.NoError(t, j1215Plus.Marshal(encoded, component))
+
+		decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+		require.NoError(t, err)
+		require.Equal(t, component, decoded)
+	}
+}
+
+func TestJson_DecodePrimitiveShorthand(t *testing.T) {
+	c, err := j1215Plus.Unmarshal([]byte(`true`))
+	require.NoError(t, err)
+	require.Equal(t, &Text{Content: "true"}, c)
+
+	c, err = j1215Plus.Unmarshal([]byte(`12`))
+	require.NoError(t, err)
+	require.Equal(t, &Text{Content: "12"}, c)
+}
+
+func TestJson_StyleShadowColor(t *testing.T) {
+	component := &Text{
+		Content: "Shadow",
+		S: Style{
+			ShadowColor: ShadowColorFromARGB(0x80445566),
+		},
+	}
+
+	encoded := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(encoded, component))
+	require.Equal(t, `{"shadow_color":-2143005338,"text":"Shadow"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(`{"shadow_color":[0.26666666666666666,0.3333333333333333,0.4,0.5019607843137255],"text":"Shadow"}`))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ShowItemModernComponents(t *testing.T) {
+	diamond, _ := key.Parse("minecraft:diamond")
+	component := &Text{
+		Content: "Hover",
+		S: Style{HoverEvent: ShowItem(&ShowItemHoverType{
+			Item:  diamond,
+			Count: 1,
+			Components: map[string]interface{}{
+				"minecraft:custom_name": map[string]interface{}{"text": "Spark"},
+			},
+		})},
+	}
+
+	encoded := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(encoded, component))
+	require.Equal(t, `{"hover_event":{"action":"show_item","components":{"minecraft:custom_name":{"text":"Spark"}},"count":1,"id":"minecraft:diamond"},"text":"Hover"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ShowItemModernComponentsWithGojay(t *testing.T) {
+	diamond, _ := key.Parse("minecraft:diamond")
+	component := &Text{
+		Content: "Hover",
+		S: Style{HoverEvent: ShowItem(&ShowItemHoverType{
+			Item:  diamond,
+			Count: 1,
+			Components: map[string]interface{}{
+				"minecraft:custom_name": map[string]interface{}{"text": "Spark"},
+			},
+		})},
+	}
+
+	encoded := new(strings.Builder)
+	require.NoError(t, (&Json{
+		UseLegacyFieldNames:          false,
+		UseLegacyHoverEventStructure: false,
+		EmitDefaultItemHoverQuantity: true,
+		ShowItemHoverDataMode:        ShowItemHoverDataModeDataComponents,
+	}).Marshal(encoded, component))
+	require.JSONEq(t, `{"hover_event":{"action":"show_item","components":{"minecraft:custom_name":{"text":"Spark"}},"count":1,"id":"minecraft:diamond"},"text":"Hover"}`, encoded.String())
+}
+
+func TestJson_ShowItemHoverDataMode(t *testing.T) {
+	diamond, _ := key.Parse("minecraft:diamond")
+	component := &Text{
+		Content: "Hover",
+		S: Style{HoverEvent: ShowItem(&ShowItemHoverType{
+			Item:  diamond,
+			Count: 1,
+			NBT:   nbt.NewBinaryTagHolder("{display:{Name:\"Legacy\"}}"),
+			Components: map[string]interface{}{
+				"minecraft:custom_name": map[string]interface{}{"text": "Modern"},
+			},
+		})},
+	}
+
+	t.Run("legacy_nbt", func(t *testing.T) {
+		encoded := new(strings.Builder)
+		require.NoError(t, (&Json{
+			UseLegacyFieldNames:          true,
+			UseLegacyHoverEventStructure: true,
+			ShowItemHoverDataMode:        ShowItemHoverDataModeLegacyNBT,
+			StdJson:                      true,
+		}).Marshal(encoded, component))
+		require.Contains(t, encoded.String(), `"tag":"{display:{Name:\"Legacy\"}}"`)
+		require.NotContains(t, encoded.String(), `"components"`)
+	})
+
+	t.Run("data_components", func(t *testing.T) {
+		encoded := new(strings.Builder)
+		require.NoError(t, (&Json{
+			UseLegacyFieldNames:          false,
+			UseLegacyHoverEventStructure: false,
+			EmitDefaultItemHoverQuantity: true,
+			ShowItemHoverDataMode:        ShowItemHoverDataModeDataComponents,
+			StdJson:                      true,
+		}).Marshal(encoded, component))
+		require.Contains(t, encoded.String(), `"components":{"minecraft:custom_name":{"text":"Modern"}}`)
+		require.NotContains(t, encoded.String(), `"tag"`)
+	})
+}
+
+func TestJson_ShowEntityUUIDIntArray(t *testing.T) {
+	entityID := uuid.MustParse("12345678-1234-1234-1234-123456789abc")
+	entityKey, _ := key.Parse("minecraft:player")
+	component := &Text{
+		Content: "Hover for entity",
+		S: Style{HoverEvent: ShowEntity(&ShowEntityHoverType{
+			Type: entityKey,
+			Id:   entityID,
+			Name: &Text{Content: "TestPlayer"},
+		})},
+	}
+
+	encoded := new(strings.Builder)
+	require.NoError(t, (&Json{
+		UseLegacyFieldNames:                     false,
+		UseLegacyHoverEventStructure:            false,
+		EmitCompactTextComponent:                true,
+		EmitHoverShowEntityIdAsIntArray:         true,
+		EmitHoverShowEntityKeyAsTypeAndUuidAsId: false,
+		StdJson:                                 true,
+	}).Marshal(encoded, component))
+	require.JSONEq(t, `{"hover_event":{"action":"show_entity","id":"minecraft:player","name":"TestPlayer","uuid":[305419896,305402420,305402420,1450744508]},"text":"Hover for entity"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_EmitCompactTextComponent(t *testing.T) {
+	encoded := new(strings.Builder)
+	require.NoError(t, (&Json{
+		EmitCompactTextComponent: true,
+		StdJson:                  true,
+	}).Marshal(encoded, &Text{Content: "plain"}))
+	require.Equal(t, `"plain"`, encoded.String())
+
+	component := &Text{
+		Content: "root",
+		Extra: []Component{
+			&Text{Content: " child"},
+			&Text{Content: " styled", S: Style{Bold: True}},
+		},
+	}
+	encoded.Reset()
+	require.NoError(t, (&Json{
+		EmitCompactTextComponent: true,
+		StdJson:                  true,
+	}).Marshal(encoded, component))
+	require.JSONEq(t, `{"extra":[" child",{"bold":true,"text":" styled"}],"text":"root"}`, encoded.String())
+}
+
+type testClickAction struct {
+	name     string
+	readable bool
+}
+
+func (a testClickAction) Name() string   { return a.name }
+func (a testClickAction) Readable() bool { return a.readable }
+
+type testHoverAction struct {
+	name     string
+	readable bool
+}
+
+func (a testHoverAction) Name() string { return a.name }
+func (a testHoverAction) Type() ActionType {
+	return ActionType(reflect.TypeOf(Text{}))
+}
+func (a testHoverAction) Readable() bool { return a.readable }
+
+func TestJson_ValidateStrictEvents(t *testing.T) {
+	strict := &Json{ValidateStrictEvents: true, StdJson: true}
+
+	err := strict.Marshal(new(strings.Builder), &Text{
+		Content: "bad click",
+		S:       Style{ClickEvent: NewClickEvent(testClickAction{name: "not_real", readable: true}, "value")},
+	})
+	require.ErrorContains(t, err, "unsupported click event action")
+
+	err = strict.Marshal(new(strings.Builder), &Text{
+		Content: "bad hover",
+		S:       Style{HoverEvent: NewHoverEvent(testHoverAction{name: "not_real", readable: true}, &Text{Content: "hover"})},
+	})
+	require.ErrorContains(t, err, "unsupported hover event action")
+
+	_, err = strict.Unmarshal([]byte(`{"text":"bad","click_event":{"action":"not_real","value":"x"}}`))
+	require.ErrorContains(t, err, "unsupported click event action")
+
+	_, err = strict.Unmarshal([]byte(`{"text":"bad","hover_event":{"action":"not_real","value":{"text":"x"}}}`))
+	require.ErrorContains(t, err, "unsupported hover event action")
+
+	_, err = strict.Unmarshal([]byte(`{"text":"bad","click_event":{"action":"run_command"}}`))
+	require.ErrorContains(t, err, "missing value for click event action")
+
+	_, err = strict.Unmarshal([]byte(`{"text":"bad","hover_event":{"action":"show_item"}}`))
+	require.ErrorContains(t, err, "missing value for hover event action")
+}
+
+func TestJson_ShowTextHoverAnyComponent(t *testing.T) {
+	component := &Text{
+		Content: "Hover",
+		S: Style{
+			HoverEvent: ShowText(&Translation{Key: "item.minecraft.diamond", Fallback: "Diamond"}),
+		},
+	}
+
+	encoded := new(strings.Builder)
+	require.NoError(t, j1215Plus.Marshal(encoded, component))
+	require.Equal(t, `{"hover_event":{"action":"show_text","value":{"fallback":"Diamond","translate":"item.minecraft.diamond"}},"text":"Hover"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ObjectComponent_AtlasSprite(t *testing.T) {
+	blocks, _ := key.Parse("minecraft:blocks")
+	diamond, _ := key.Parse("minecraft:item/diamond")
+	component := AtlasSprite(blocks, diamond)
+
+	encoded := new(strings.Builder)
+	err := j1215Plus.Marshal(encoded, component)
+	require.NoError(t, err)
+	require.Equal(t, `{"atlas":"minecraft:blocks","sprite":"minecraft:item/diamond"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ObjectComponent_DecodeAdventureSpriteShape(t *testing.T) {
+	decoded, err := j1215Plus.Unmarshal([]byte(`{"fallback":"diamond","sprite":"item/diamond"}`))
+	require.NoError(t, err)
+
+	diamond, _ := key.Parse("minecraft:item/diamond")
+	expected := AtlasSprite(DefaultSpriteAtlas, diamond)
+	expected.Fallback = &Text{Content: "diamond"}
+	require.Equal(t, expected, decoded)
+}
+
+func TestJson_ObjectComponent_PlayerHeadWithFallback(t *testing.T) {
+	id := uuid.MustParse("12345678-1234-1234-1234-123456789abc")
+	component := PlayerHead(&PlayerProfile{
+		Name: "jeb_",
+		Id:   id,
+	}, false)
+	component.Fallback = &Text{Content: "jeb_"}
+
+	encoded := new(strings.Builder)
+	err := j1215Plus.Marshal(encoded, component)
+	require.NoError(t, err)
+	require.Equal(t, `{"fallback":{"text":"jeb_"},"hat":false,"player":{"id":"12345678-1234-1234-1234-123456789abc","name":"jeb_"}}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ObjectComponent_PlayerNameShortcut(t *testing.T) {
+	component := PlayerHead(&PlayerProfile{Name: "jeb_"}, true)
+
+	encoded := new(strings.Builder)
+	err := j1215Plus.Marshal(encoded, component)
+	require.NoError(t, err)
+	require.Equal(t, `{"hat":true,"player":"jeb_"}`, encoded.String())
+
+	decoded, err := j1215Plus.Unmarshal([]byte(encoded.String()))
+	require.NoError(t, err)
+	require.Equal(t, component, decoded)
+}
+
+func TestJson_ObjectComponent_PlayerPropertiesMap(t *testing.T) {
+	decoded, err := j1215Plus.Unmarshal([]byte(`{"player":{"name":"jeb_","properties":{"textures":["value-a","value-b"]}}}`))
+	require.NoError(t, err)
+
+	require.Equal(t, PlayerHead(&PlayerProfile{
+		Name: "jeb_",
+		Properties: []ProfileProperty{
+			{Name: "textures", Value: "value-a"},
+			{Name: "textures", Value: "value-b"},
+		},
+	}, true), decoded)
 }
 
 // Test encoding with new format (1.21.5+)
@@ -533,8 +879,8 @@ func TestJson_HoverEvent_AllActions(t *testing.T) {
 			require.Contains(t, encoded.String(), `"hoverEvent"`)
 			require.Contains(t, encoded.String(), `"action":"show_entity"`)
 			require.Contains(t, encoded.String(), `"contents"`)
-			require.Contains(t, encoded.String(), `"type":"minecraft:player"`)                   // Legacy field name
-			require.Contains(t, encoded.String(), `"id":"12345678-1234-1234-1234-123456789abc"`) // Legacy field name
+			require.Contains(t, encoded.String(), `"type":"minecraft:player"`) // Legacy field name
+			require.Contains(t, encoded.String(), `"id":[305419896,305402420,305402420,1450744508]`)
 
 			decoded, err := jPre1215.Unmarshal([]byte(encoded.String()))
 			require.NoError(t, err)
@@ -550,8 +896,8 @@ func TestJson_HoverEvent_AllActions(t *testing.T) {
 			// Should contain new inlined structure with new field names
 			require.Contains(t, encoded.String(), `"hover_event"`)
 			require.Contains(t, encoded.String(), `"action":"show_entity"`)
-			require.Contains(t, encoded.String(), `"id":"minecraft:player"`)                       // New field name (was "type")
-			require.Contains(t, encoded.String(), `"uuid":"12345678-1234-1234-1234-123456789abc"`) // New field name (was "id")
+			require.Contains(t, encoded.String(), `"id":"minecraft:player"`) // New field name (was "type")
+			require.Contains(t, encoded.String(), `"uuid":[305419896,305402420,305402420,1450744508]`)
 			require.NotContains(t, encoded.String(), `"contents"`)
 			require.NotContains(t, encoded.String(), `"type":"minecraft:player"`) // Should not use legacy field name
 

@@ -5,23 +5,23 @@
 
 ## Minecraft Text Components (`minecraft/component`)
 
-A comprehensive Minecraft text components library with **full multi-version support** for all Minecraft versions from legacy to the latest (1.21.6+).
+A comprehensive Minecraft text components library with **multi-version support** for Minecraft text component formats from legacy JSON through modern object components.
 
 ### 🎯 Key Features
 
-- **Complete Multi-Version Support**: Supports all Minecraft versions from legacy to 1.21.6+
+- **Multi-Version Support**: Supports legacy JSON through modern 1.21.9+/26.1 component shapes
 - **Backward & Forward Compatibility**: Can decode any format regardless of encoding settings
 - **Configurable Encoding**: Choose between formats for different Minecraft versions
 - **High Performance**: Uses optimized JSON marshalling (thanks to [Gojay](https://github.com/francoispqt/gojay))
-- **Complete Component Support**: Text, translation, click events, hover events, styling, and more
-- **Future-Ready**: Includes upcoming 1.21.6+ features like dialog and custom click events
+- **Complete Component Support**: Text, translation, score, selector, keybind, NBT, object, click/hover events, styling, and more
+- **Modern Object Components**: Supports 1.21.9+ atlas sprites/player heads and 26.1 object fallbacks
 
 ### 🚀 Quick Start
 
 ```go
 import "go.minekube.com/common/minecraft/component/codec"
 
-// Create a codec for the latest format (1.21.5+)
+// Create a codec for the modern format (1.21.5+)
 j := &codec.Json{
     UseLegacyFieldNames:          false, // Use snake_case field names
     UseLegacyClickEventStructure: false, // Use specific field names
@@ -58,6 +58,18 @@ err := j.Marshal(&buf, component)
 | `show_dialog`       | `value`      | `dialog`        | 1.21.6+ | Opens dialog                      |
 | `custom`            | `value`      | `id`/`payload`  | 1.21.6+ | Custom server event               |
 
+### 📦 Supported Content Types
+
+| Component type | JSON key(s) | Notes |
+| -------------- | ----------- | ----- |
+| Text | `text` | Also decodes JSON string, boolean, and number shorthands |
+| Translation | `translate`, `fallback`, `with` | Supports 1.19.4+ fallback |
+| Score | `score` | Includes obsolete `value` for compatibility |
+| Selector | `selector`, `separator` | Supports component separator |
+| Keybind | `keybind` | Client-local keybind rendering |
+| NBT | `nbt`, `block`/`entity`/`storage`, `interpret`, `plain`, `separator` | Supports 26.1 `plain` |
+| Object | `atlas`/`sprite`, `player`, `hat`, `fallback` | Supports 1.21.9+ sprites/player heads and 26.1 fallback |
+
 ### 🎛️ Version Configuration Examples
 
 **Using Preset Configurations (Recommended):**
@@ -74,7 +86,7 @@ j := codec.JsonPre1_20_3
 // For clients 1.20.3+ but before 1.21.5
 j := codec.JsonPre1_21_5
 
-// For clients 1.21.5+ (latest format)
+// For clients 1.21.5+ (modern format)
 j := codec.JsonModern
 
 // Universal compatibility (encodes modern, decodes all)
@@ -84,7 +96,7 @@ j := codec.JsonUniversal
 **Manual Configuration:**
 
 ```go
-// Latest Format (1.21.6+)
+// Modern Format (1.21.5+ base, with newer component types supported)
 j := &codec.Json{
     UseLegacyFieldNames:          false, // snake_case: click_event, hover_event
     UseLegacyClickEventStructure: false, // Specific fields: url, path, command, etc.
@@ -109,8 +121,8 @@ j := &codec.Json{
 | `JsonPre1_16`   | Before 1.16     | camelCase   | Universal "value" | Legacy + value    | Color downsampling          |
 | `JsonPre1_20_3` | 1.16 - 1.20.2   | camelCase   | Universal "value" | Legacy + contents | Hex colors                  |
 | `JsonPre1_21_5` | 1.20.3 - 1.21.4 | camelCase   | Universal "value" | Legacy + contents | Compact text, int UUIDs     |
-| `JsonModern`    | 1.21.5+         | snake_case  | Specific fields   | Inlined           | All modern features         |
-| `JsonUniversal` | Any             | snake_case  | Specific fields   | Inlined           | Decodes all, encodes modern |
+| `JsonModern`    | Modern clients  | snake_case  | Specific fields   | Inlined           | Shadow/object components, lossless item hover data |
+| `JsonUniversal` | Any             | snake_case  | Specific fields   | Inlined           | Decodes all, encodes modern losslessly |
 
 ### ⚙️ Advanced JSON Configuration Options
 
@@ -132,7 +144,7 @@ j := &codec.Json{
     EmitDefaultItemHoverQuantity:             true,  // Always emit count=1 (1.20.5+)
 
     // Advanced formatting modes
-    ShowItemHoverDataMode: codec.ShowItemHoverDataModeDataComponents, // Legacy NBT vs modern data components
+    ShowItemHoverDataMode: codec.ShowItemHoverDataModeEither, // Legacy NBT vs modern data components
     ShadowColorMode:       codec.ShadowColorEmitModeInteger,          // Shadow color format (1.21.4+)
 
     StdJson: true,
@@ -164,7 +176,7 @@ j := &codec.Json{
 - `ShadowColorEmitModeInteger` - Emit as packed ARGB integer
 - `ShadowColorEmitModeArray` - Emit as `[r, g, b, a]` float array
 
-### 🆕 New Minecraft 1.21.6 Features
+### 🆕 Modern Minecraft Features
 
 ```go
 // Dialog click event (1.21.6+)
@@ -182,11 +194,68 @@ customComponent := &component.Text{
         ClickEvent: component.CustomEvent("my_event", "some_payload"),
     },
 }
+
+// Atlas sprite object component (1.21.9+), usable for item/block sprites in text
+atlas, _ := key.Parse("minecraft:blocks")
+sprite, _ := key.Parse("minecraft:item/diamond")
+spriteComponent := component.AtlasSprite(atlas, sprite)
+
+// Player head object component with a 26.1 fallback for contexts like server MOTDs
+playerComponent := component.PlayerHead(&component.PlayerProfile{Name: "jeb_"}, true)
+playerComponent.Fallback = &component.Text{Content: "jeb_"}
+
+// Score, selector, keybind, and NBT content types
+scoreComponent := &component.Score{Name: "@s", Objective: "kills"}
+selectorComponent := &component.Selector{Pattern: "@a", Separator: &component.Text{Content: ", "}}
+keybindComponent := &component.Keybind{Key: "key.jump"}
+nbtComponent := &component.EntityNBT{
+    NBT:    component.NBT{Path: "Health", Plain: true},
+    Entity: "@s",
+}
 ```
 
 ### 🔄 Format Examples
 
-**Modern Format (1.21.5+):**
+**Atlas Sprite Object (1.21.9+):**
+
+```json
+{
+  "atlas": "minecraft:blocks",
+  "sprite": "minecraft:item/diamond"
+}
+```
+
+**Player Head Object With Fallback (26.1+):**
+
+```json
+{
+  "fallback": {
+    "text": "jeb_"
+  },
+  "hat": true,
+  "player": "jeb_"
+}
+```
+
+**Modern Hover Item Components (1.20.5+):**
+
+```json
+{
+  "text": "Hover",
+  "hover_event": {
+    "action": "show_item",
+    "id": "minecraft:diamond",
+    "count": 1,
+    "components": {
+      "minecraft:custom_name": {
+        "text": "Spark"
+      }
+    }
+  }
+}
+```
+
+**Modern Click/Hover Format (1.21.5+):**
 
 ```json
 {
@@ -226,8 +295,11 @@ customComponent := &component.Text{
 
 - **Legacy colors & formats**: Support for legacy color codes
 - **Minecraft 1.16+ hex colors**: Full hex color support (`#ff5555`)
+- **Minecraft 1.21.4+ shadow colors**: Packed integer and `[r, g, b, a]` float-array formats
 - **Hover events**: `show_text`, `show_item`, `show_entity` with all format variations
-- **Translations**: Full translation component support with arguments
+- **Modern item hover data**: Supports 1.20.5+ `components` next to legacy `tag`
+- **Object components**: 1.21.9+ atlas sprites and player heads, including 26.1 fallbacks
+- **Translations**: Full translation component support with arguments and fallback
 - **Cross-version compatibility**: Decode any format, encode in your preferred format
 - **Performance optimized**: Much faster than Go's standard JSON encoding
 - **Comprehensive testing**: Extensive test coverage for all versions and formats

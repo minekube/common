@@ -19,9 +19,10 @@ type Text struct {
 }
 
 type Translation struct {
-	Key  string // Translation key
-	S    Style
-	With []Component
+	Key      string // Translation key
+	S        Style
+	With     []Component
+	Fallback string
 }
 
 func (t *Text) Children() []Component {
